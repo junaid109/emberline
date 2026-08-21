@@ -17,3 +17,7 @@ export const CARRY_CAP = 8;
 export const HARVEST_SECONDS = 0.7;    // per item pulled from a node
 export const HARVEST_RANGE = 2.2;
 export const DEPOSIT_INTERVAL = 0.09;  // seconds between items flying off the stack
+
+export const STICK_RADIUS = 60;        // pointer distance in CSS px at which the stick reads full deflection
+export const STICK_ZONE_X_MAX = 0.6;   // stick activates only left of this fraction of viewport width
+export const STICK_ZONE_Y_MIN = 0.45;  // stick activates only below this fraction of viewport height
