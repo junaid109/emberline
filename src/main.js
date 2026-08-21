@@ -2,18 +2,17 @@
 /* global THREE */
 import { createScene } from './render/scene.js';
 import { createPlayer } from './render/actors.js';
+import { createGround } from './render/ground.js';
 import { createJoystick } from './input/joystick.js';
-import { PLAYER_SPEED, WORLD_RADIUS, CAMERA_HEIGHT, CAMERA_DISTANCE } from './core/constants.js';
+import { ringRadius, drainHeat } from './core/heat.js';
+import { PLAYER_SPEED, WORLD_RADIUS, CAMERA_HEIGHT, CAMERA_DISTANCE, HEAT_START, HEAT_DRAIN_DAY } from './core/constants.js';
 
 const view = createScene(document.getElementById('game'));
 const stick = createJoystick(document.getElementById('game'));
 
-const ground = new THREE.Mesh(
-  new THREE.CircleGeometry(WORLD_RADIUS, 48),
-  new THREE.MeshLambertMaterial({ color: 0xe8eef4 })
-);
-ground.rotation.x = -Math.PI / 2;
-view.scene.add(ground);
+const groundView = createGround(view.scene);
+
+const state = { heat: HEAT_START };
 
 const player = createPlayer();
 view.scene.add(player);
@@ -34,6 +33,9 @@ function frame(now) {
 
   view.camera.position.set(player.position.x, CAMERA_HEIGHT, player.position.z + CAMERA_DISTANCE);
   view.camera.lookAt(player.position.x, 0, player.position.z);
+
+  state.heat = drainHeat(state.heat, dt, HEAT_DRAIN_DAY);
+  groundView.setRingRadius(ringRadius(state.heat));
 
   view.render();
   requestAnimationFrame(frame);
