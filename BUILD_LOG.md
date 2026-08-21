@@ -90,7 +90,9 @@ predates 2026-08-10).
 - Design spec written to `docs/superpowers/specs/2026-08-21-emberline-design.md`.
 - Repository initialised locally.
 - Awaiting: official Build Log guidance PDF (Drive link is sign-in gated) to align this format.
-- Awaiting: target test device (iOS or Android) — real-hardware playtesting matters because
-  Playability is 25% of the score.
+- Test devices confirmed: **both Android and iPhone**. Android is the primary debug device via
+  Chrome remote debugging over USB. iPhone is a late-schedule compatibility pass. Known iOS Safari
+  risks to code defensively against from day 1: WebAudio unlock requiring a first user gesture, the
+  `100vh` viewport bug, and `touch-action` scroll interception on the joystick.
 - Next session: implementation plan, then the day 1–2 playable slice (joystick, terrain, resource
   nodes, carry-stack, furnace deposit, heat ring).
