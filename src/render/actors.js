@@ -81,3 +81,45 @@ export function updateStack(anchor, items) {
     anchor.add(log);
   }
 }
+
+export function createFurnace() {
+  const g = new THREE.Group();
+
+  const base = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.5, 1.8, 2.2, 8),
+    new THREE.MeshLambertMaterial({ color: 0x5a5a5f })
+  );
+  base.position.y = 1.1;
+  g.add(base);
+
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.9, 2.0, 6),
+    new THREE.MeshBasicMaterial({ color: 0xff8c1a })
+  );
+  flame.position.y = 3.1;
+  g.add(flame);
+
+  const glow = new THREE.PointLight(0xffa040, 2.0, 30, 2);
+  glow.position.y = 3.2;
+  g.add(glow);
+
+  /** @param {number} t normalised fuel, 0 to 1 */
+  g.userData.setFlame = (t) => {
+    const s = 0.25 + t * 0.75;
+    flame.scale.set(s, s, s);
+    flame.position.y = 2.4 + s * 0.7;
+    glow.intensity = 0.4 + t * 2.6;
+  };
+
+  // Walk-in deposit pad, flush with the ground.
+  const pad = new THREE.Mesh(
+    new THREE.RingGeometry(2.2, 3.2, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffd36e, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+  );
+  pad.rotation.x = -Math.PI / 2;
+  pad.position.y = 0.03;
+  g.add(pad);
+  g.userData.padRadius = 3.2;
+
+  return g;
+}
