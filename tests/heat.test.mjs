@@ -31,3 +31,11 @@ test('drain never goes below zero', () => {
 test('fuel is clamped at the maximum', () => {
   assert.equal(addFuel(95, 20), HEAT_MAX);
 });
+
+test('fuel adds normally well below the cap', () => {
+  assert.equal(addFuel(30, 15), 45);
+});
+
+test('adding zero fuel leaves heat unchanged', () => {
+  assert.equal(addFuel(40, 0), 40);
+});

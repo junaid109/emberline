@@ -10,6 +10,7 @@ export const HEAT_START = 60;
 export const HEAT_DRAIN_DAY = 1.6;     // heat units per second
 export const RING_MIN = 6;             // ring radius at zero heat
 export const RING_MAX = 22;            // ring radius at full heat
+export const RIM_BAND = 0.5;           // constant world-space width of the rim marking the ring boundary
 
 export const PLAYER_SPEED = 7.5;       // world units per second
 export const CARRY_CAP = 8;
