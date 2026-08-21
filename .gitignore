@@ -9,3 +9,6 @@ build/
 Thumbs.db
 assets/raw/
 .vercel
+.superpowers/
+vendor/
+/index.html
