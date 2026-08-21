@@ -21,7 +21,7 @@ export function validateZipContents(fileNames, totalBytes, indexHtmlText) {
   if (totalBytes > MAX_BYTES) {
     errors.push(`zip is ${(totalBytes / 1048576).toFixed(1)}MB, over the 35MB limit`);
   }
-  const external = indexHtmlText.match(/["'(]\s*https?:\/\/[^"')\s]+/g);
+  const external = indexHtmlText.match(/["'`(]\s*https?:\/\/[^"'`)\s]+/g);
   if (external) {
     errors.push(`index.html references an external URL: ${external[0].slice(0, 80)}`);
   }
@@ -33,6 +33,29 @@ function listFiles(dir, base = dir) {
     const p = join(dir, e.name);
     return e.isDirectory() ? listFiles(p, base) : [relative(base, p).replaceAll('\\', '/')];
   });
+}
+
+/**
+ * Impure: reads the actual entry list out of a built .zip file on disk, so the
+ * validator checks what was really archived rather than a list reconstructed
+ * from the source tree. Throws on failure — callers must treat that as a hard
+ * failure, never a silent pass.
+ * @param {string} zipPath
+ * @returns {string[]} entry paths, forward-slashed
+ */
+export function listZipEntries(zipPath) {
+  if (process.platform === 'win32') {
+    const script = [
+      'Add-Type -AssemblyName System.IO.Compression.FileSystem;',
+      `$zip = [System.IO.Compression.ZipFile]::OpenRead('${zipPath}');`,
+      '$zip.Entries | ForEach-Object { $_.FullName };',
+      '$zip.Dispose();',
+    ].join(' ');
+    const out = execFileSync('powershell', ['-NoProfile', '-Command', script], { encoding: 'utf8' });
+    return out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((p) => p.replaceAll('\\', '/'));
+  }
+  const out = execFileSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' });
+  return out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((p) => p.replaceAll('\\', '/'));
 }
 
 function main() {
@@ -52,8 +75,27 @@ function main() {
     execFileSync('zip', ['-r', '-q', 'emberline.zip', ...parts], { cwd: root, stdio: 'inherit' });
   }
 
-  const names = ['index.html', ...(existsSync(join(root, 'vendor')) ? listFiles(join(root, 'vendor')).map((f) => `vendor/${f}`) : [])];
-  const result = validateZipContents(names, statSync(out).size, readFileSync(join(root, 'index.html'), 'utf8'));
+  let names;
+  try {
+    names = listZipEntries(out);
+  } catch (err) {
+    console.error('PACKAGE VALIDATION FAILED:');
+    console.error(`  - could not read entries from emberline.zip: ${err.message}`);
+    process.exit(1);
+    return;
+  }
+
+  let indexHtmlText;
+  try {
+    indexHtmlText = readFileSync(join(root, 'index.html'), 'utf8');
+  } catch (err) {
+    console.error('PACKAGE VALIDATION FAILED:');
+    console.error(`  - could not read index.html: ${err.message}`);
+    process.exit(1);
+    return;
+  }
+
+  const result = validateZipContents(names, statSync(out).size, indexHtmlText);
 
   if (!result.ok) {
     console.error('PACKAGE VALIDATION FAILED:');
