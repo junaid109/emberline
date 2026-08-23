@@ -1,6 +1,6 @@
 // src/render/scene.js
 /* global THREE */
-import { MAX_DPR, CAMERA_FOV, CAMERA_HEIGHT, CAMERA_DISTANCE } from '../core/constants.js';
+import { MAX_DPR, CAMERA_FOV, CAMERA_HEIGHT, CAMERA_DISTANCE, CAMERA_TARGET_WIDTH } from '../core/constants.js';
 
 export function createScene(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -32,6 +32,17 @@ export function createScene(canvas) {
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
+
+    // A vertical FOV specified as a fixed constant gets crushed horizontally
+    // by a portrait aspect ratio (see constants.js CAMERA_TARGET_WIDTH for the
+    // full story). Instead, derive the vertical FOV every resize from the
+    // ground width that must be visible and the live aspect ratio, so the
+    // heat ring is framed correctly regardless of device aspect.
+    const dist = Math.sqrt(CAMERA_HEIGHT * CAMERA_HEIGHT + CAMERA_DISTANCE * CAMERA_DISTANCE);
+    const hHalf = Math.atan((CAMERA_TARGET_WIDTH / 2) / dist);
+    const vFov = 2 * Math.atan(Math.tan(hHalf) / camera.aspect);
+    camera.fov = vFov * (180 / Math.PI);
+
     camera.updateProjectionMatrix();
   }
 

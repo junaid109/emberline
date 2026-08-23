@@ -30,7 +30,7 @@ test('one deposit occurs after enough accumulated time, not before', () => {
 
   // just under the interval: nothing deposited yet
   let kinds = tickDeposit(dep, DEPOSIT_INTERVAL - 0.01, true, carry, store);
-  assert.deepEqual(kinds, []);
+  assert.equal(kinds, null);
   assert.equal(store.wood, 0);
   assert.equal(carryTotal(carry), 2);
 
@@ -50,7 +50,8 @@ test('drain is bounded: dt clamped to 0.05s cannot deposit more than one item at
   const store = createStore();
 
   const kinds = tickDeposit(dep, 0.05, true, carry, store);
-  assert.ok(kinds.length <= 1, `expected at most 1 deposit per call, got ${kinds.length}`);
+  const count = kinds ? kinds.length : 0;
+  assert.ok(count <= 1, `expected at most 1 deposit per call, got ${count}`);
 });
 
 test('a large dt does not dump the whole stack at once', () => {
@@ -79,7 +80,7 @@ test('off the pad, nothing is deposited and the timer resets', () => {
 
   // step off the pad
   const kinds = tickDeposit(dep, 0.05, false, carry, store);
-  assert.deepEqual(kinds, []);
+  assert.equal(kinds, null);
   assert.equal(dep.timer, 0);
   assert.equal(carryTotal(carry), 1);
   assert.equal(store.wood, 0);
@@ -105,7 +106,7 @@ test('over many calls, total deposited into store equals items removed from carr
 
   for (let i = 0; i < 200 && carryTotal(carry) > 0; i++) {
     const kinds = tickDeposit(dep, 0.05, true, carry, store);
-    totalDeposited += kinds.length;
+    if (kinds) totalDeposited += kinds.length;
   }
 
   const totalInStore = store.wood + store.stone;
@@ -125,7 +126,7 @@ test('the returned kinds list matches what was actually deposited', () => {
   const allKinds = [];
   for (let i = 0; i < 50 && carryTotal(carry) > 0; i++) {
     const kinds = tickDeposit(dep, 0.05, true, carry, store);
-    allKinds.push(...kinds);
+    if (kinds) allKinds.push(...kinds);
   }
 
   const woodCount = allKinds.filter(k => k === 'wood').length;

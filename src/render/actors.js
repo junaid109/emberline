@@ -1,5 +1,6 @@
 // src/render/actors.js
 /* global THREE */
+import { PAD_RADIUS } from '../core/constants.js';
 
 const COLORS = {
   parka: 0x2e86c1,
@@ -45,20 +46,19 @@ export function createPlayer() {
 const LOG_GEO = new THREE.BoxGeometry(0.55, 0.16, 0.55);
 const LOG_MAT = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
 
+const TRUNK_GEO = new THREE.CylinderGeometry(0.18, 0.24, 1.4, 6);
+const TRUNK_MAT = new THREE.MeshLambertMaterial({ color: 0x6b4423 });
+const FOLIAGE_GEO = new THREE.ConeGeometry(1.1, 2.6, 7);
+const FOLIAGE_MAT = new THREE.MeshLambertMaterial({ color: 0x2f6b4f });
+
 export function createTree(x, z) {
   const g = new THREE.Group();
 
-  const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.18, 0.24, 1.4, 6),
-    new THREE.MeshLambertMaterial({ color: 0x6b4423 })
-  );
+  const trunk = new THREE.Mesh(TRUNK_GEO, TRUNK_MAT);
   trunk.position.y = 0.7;
   g.add(trunk);
 
-  const foliage = new THREE.Mesh(
-    new THREE.ConeGeometry(1.1, 2.6, 7),
-    new THREE.MeshLambertMaterial({ color: 0x2f6b4f })
-  );
+  const foliage = new THREE.Mesh(FOLIAGE_GEO, FOLIAGE_MAT);
   foliage.position.y = 2.3;
   g.add(foliage);
 
@@ -82,20 +82,23 @@ export function updateStack(anchor, items) {
   }
 }
 
+const FURNACE_BASE_GEO = new THREE.CylinderGeometry(1.5, 1.8, 2.2, 8);
+const FURNACE_BASE_MAT = new THREE.MeshLambertMaterial({ color: 0x5a5a5f });
+const FURNACE_FLAME_GEO = new THREE.ConeGeometry(0.9, 2.0, 6);
+const FURNACE_FLAME_MAT = new THREE.MeshBasicMaterial({ color: 0xff8c1a });
+// Pad inner radius kept a fixed 1 unit inside PAD_RADIUS so the visual ring
+// and the isOnPad collision radius (PAD_RADIUS itself) can never drift apart.
+const FURNACE_PAD_GEO = new THREE.RingGeometry(PAD_RADIUS - 1, PAD_RADIUS, 32);
+const FURNACE_PAD_MAT = new THREE.MeshBasicMaterial({ color: 0xffd36e, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+
 export function createFurnace() {
   const g = new THREE.Group();
 
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.5, 1.8, 2.2, 8),
-    new THREE.MeshLambertMaterial({ color: 0x5a5a5f })
-  );
+  const base = new THREE.Mesh(FURNACE_BASE_GEO, FURNACE_BASE_MAT);
   base.position.y = 1.1;
   g.add(base);
 
-  const flame = new THREE.Mesh(
-    new THREE.ConeGeometry(0.9, 2.0, 6),
-    new THREE.MeshBasicMaterial({ color: 0xff8c1a })
-  );
+  const flame = new THREE.Mesh(FURNACE_FLAME_GEO, FURNACE_FLAME_MAT);
   flame.position.y = 3.1;
   g.add(flame);
 
@@ -112,14 +115,11 @@ export function createFurnace() {
   };
 
   // Walk-in deposit pad, flush with the ground.
-  const pad = new THREE.Mesh(
-    new THREE.RingGeometry(2.2, 3.2, 32),
-    new THREE.MeshBasicMaterial({ color: 0xffd36e, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
-  );
+  const pad = new THREE.Mesh(FURNACE_PAD_GEO, FURNACE_PAD_MAT);
   pad.rotation.x = -Math.PI / 2;
   pad.position.y = 0.03;
   g.add(pad);
-  g.userData.padRadius = 3.2;
+  g.userData.padRadius = PAD_RADIUS;
 
   return g;
 }

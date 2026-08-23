@@ -14,13 +14,16 @@ export function createHud(root) {
   ].join(';');
 
   const rows = {};
+  const lastValues = {};
   for (const r of RESOURCES) {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.35);border-radius:14px;padding:3px 10px 3px 6px;min-width:76px';
     row.innerHTML = `<span style="font-size:17px">${ICONS[r]}</span><span data-v>0</span>`;
     panel.appendChild(row);
     rows[r] = row.querySelector('[data-v]');
+    lastValues[r] = '0';
   }
+  let lastFuel = null;
 
   const fuel = document.createElement('div');
   fuel.style.cssText = [
@@ -35,8 +38,18 @@ export function createHud(root) {
 
   return {
     update(store, heat) {
-      for (const r of RESOURCES) rows[r].textContent = String(store[r]);
-      fuel.textContent = `🔥 ${Math.ceil((heat / HEAT_MAX) * 100)}%`;
+      for (const r of RESOURCES) {
+        const v = String(store[r]);
+        if (v !== lastValues[r]) {
+          rows[r].textContent = v;
+          lastValues[r] = v;
+        }
+      }
+      const fuelText = `🔥 ${Math.ceil((heat / HEAT_MAX) * 100)}%`;
+      if (fuelText !== lastFuel) {
+        fuel.textContent = fuelText;
+        lastFuel = fuelText;
+      }
     },
   };
 }
