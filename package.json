@@ -8,7 +8,9 @@
     "build": "node tools/build.mjs",
     "serve": "node tools/serve.mjs",
     "package": "node tools/package.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "unpack": "node tools/unpack.mjs",
+    "serve:zip": "node tools/package.mjs && node tools/unpack.mjs && node tools/serve.mjs --dir dist"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",
