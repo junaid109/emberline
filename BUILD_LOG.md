@@ -201,3 +201,93 @@ Minimal, and each is recorded with its cause:
 - Build Log guidance PDF still not readable (the Drive link requires sign-in); this format follows
   the Devpost description and should be reconciled against the official template.
 - Next: Milestone 2 — day/night cycle, dusk telegraph, three gates, wolves, guard squad, rally taps.
+
+---
+
+## Session 003 — 2026-08-23 — World extraction, and the bugs only a screenshot could find
+
+Extracted the simulation out of the render loop, then ran the game in a real browser at phone
+viewport size for the first time. The browser pass found three defects that 113 passing tests had
+no way to see.
+
+### Decisions locked
+
+1. **`src/core/world.js` owns all state AND system ordering.** The previous milestone left both in
+   the frame loop, where nothing could test them. `tickWorld(world, dt, dirX, dirZ)` now runs move
+   to drain to harvest to deposit and returns a reused events object; `src/main.js` is reduced to
+   copying numbers onto meshes and owns no game rules at all.
+2. **Every depth-dependent camera setting is derived, never hand-picked.** Fog bounds and the far
+   clip plane are computed from `CAMERA_HEIGHT`/`CAMERA_DISTANCE`/`WORLD_RADIUS` in
+   `constants.js`, so moving the camera can no longer leave them behind at stale values.
+3. **Visual ground extent is separate from walkable extent.** `GROUND_VISUAL_RADIUS` (220) is what
+   is drawn; `WORLD_RADIUS` (34) is what bounds the player.
+4. **The frame-time clamp is a named, tested constant.** `MAX_FRAME_DT` is load-bearing — it is
+   what makes `tickHarvest` and `tickDeposit` provably bounded — so it is asserted against
+   `HARVEST_SECONDS` rather than left as a literal in the loop.
+
+### Prompted
+
+- Asked for the world extraction to be done test-first, with the system ORDER pinned by a test
+  rather than by a comment, since ordering was the specific thing that had no coverage.
+- Asked for the running game to be opened at phone viewport size and inspected, rather than
+  trusting a green test suite as evidence that it renders.
+
+### Result
+
+The extraction itself was clean: 31 new tests, including a full gather-haul-deposit round trip
+driven entirely through the same joystick input the player uses.
+
+Then the first browser screenshot came back as a flat grey rectangle, and the pass turned up three
+defects in a row that no unit test could have caught:
+
+- **The entire scene was fogged out.** The diorama camera sits ~88 world units from its target, but
+  fog had been left at a hand-picked 40–80 range from before the camera was moved. Every object in
+  the game was past `fog.far`, so the world rendered as one uniform grey field. Fog is now derived
+  from the camera geometry and the bounds are asserted in tests.
+- **The canvas was never full-screen.** `#game { position: fixed; inset: 0 }` looks like it fills
+  the viewport, but a canvas is a **replaced element** — with `width: auto` it keeps its intrinsic
+  size and ignores the inset box entirely. Since the renderer sizes its drawing buffer from
+  `canvas.clientWidth`, this made the renderer feed its own output back in as input: the game ran in
+  a 600x300 box in the corner of the screen, on every device. Fixed with explicit `width`/`height`,
+  and the packaging validator now rejects a `#game` rule that lacks them.
+- **The playfield read as a floating island.** The snow was drawn at the walkable radius, leaving a
+  hard-edged ellipse with void above and below it. The snowfield now runs past the fog distance and
+  dissolves into the horizon.
+
+A fourth, smaller finding came from actually playing it: standing on the furnace did nothing,
+because the deposit pad was drawn as a thin half-transparent ring that was invisible against the
+thawed ground. Walk-in pads are this game's only interaction verb, so the pad is now a bright
+filled disc with a solid rim. Both are sized from `PAD_RADIUS`, so what is drawn cannot drift from
+what is tested.
+
+### Hand edits
+
+- The new packaging-validator rule initially failed seven existing tests, whose fixtures are HTML
+  fragments with no canvas in them. Scoped the rule to documents that actually contain
+  `<canvas id="game">` rather than weakening the check.
+- Three test expectations were written assuming one tree fills the carry. It does not —
+  `NODE_AMOUNT` (6) is deliberately below `CARRY_CAP` (8). Corrected the tests and added an explicit
+  assertion pinning that relationship, since it is a tuning decision worth protecting.
+
+### Verified
+
+- 114 tests passing.
+- `npm run package` emits `emberline.zip` at 0.29MB.
+- Played in-browser at a 375x812 portrait viewport: canvas confirmed at 375x812 CSS with a 750x1624
+  backing buffer (DPR capped at 2 as intended), no console errors.
+- Full loop confirmed on screen: walked out, auto-harvested a tree to depletion (its mesh
+  disappeared), hauled back, stepped onto the pad, and watched wood go 0 to 6 while heat went 0% to
+  34% and the ring visibly grew.
+- The new validator rule was mutation-checked: it rejects the old `inset: 0`-only CSS and accepts
+  the fixed rule.
+
+### Open / next
+
+- **Still not verified on physical hardware.** Everything above was a desktop browser at phone
+  dimensions, which cannot tell us about thumb reach, real DPR, or sustained framerate.
+- **`PAD_RADIUS` (3.2) may be too tight.** Approaching the furnace, it was easy to stand somewhere
+  that looked correct and be outside it. Deliberately left for the tuning pass rather than changed
+  on a hunch, but it needs a real thumb on a real phone to judge.
+- **Heat drains a full bar in about 37 seconds**, so the furnace dies before a round trip completes.
+  That is expected — the day/night cycle that gives this pressure its shape is the next milestone.
+- Next: Milestone 2 — day/night cycle, dusk telegraph, three gates, wolves, guard squad, rally taps.

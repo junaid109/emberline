@@ -74,6 +74,23 @@ export function validateZipContents(fileNames, totalBytes, indexHtmlText) {
     errors.push(`index.html appears to contain Three.js's own source (found internal marker "${EMBEDDED_THREE_MARKER}") — it must be loaded from ./vendor/three.js, not bundled in`);
   }
 
+  // Rule: the canvas must be given an explicit width and height in CSS.
+  // A canvas is a REPLACED element, so `position: fixed; inset: 0` alone does
+  // NOT stretch it -- with width:auto it falls back to its intrinsic size.
+  // Because scene.js derives the drawing-buffer size from canvas.clientWidth,
+  // losing this rule turns the renderer into a feedback loop and the game ships
+  // rendering into a 300x150 box in the corner of the screen. Silent, total,
+  // and invisible to every other check here.
+  const hasCanvas = /<canvas[^>]*\bid\s*=\s*["']game["']/.test(indexHtmlText);
+  const gameRule = indexHtmlText.match(/#game\s*\{[^}]*\}/);
+  if (!hasCanvas) {
+    // Not a full document (a fragment under test, say) -- nothing to check.
+  } else if (!gameRule) {
+    errors.push('index.html has no CSS rule for #game — the canvas will render at its intrinsic 300x150');
+  } else if (!/\bwidth\s*:/.test(gameRule[0]) || !/\bheight\s*:/.test(gameRule[0])) {
+    errors.push('the #game CSS rule must set an explicit width and height; `inset: 0` does not stretch a canvas (it is a replaced element)');
+  }
+
   return { ok: errors.length === 0, errors };
 }
 

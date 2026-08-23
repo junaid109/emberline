@@ -248,3 +248,32 @@ test('the module can be imported when process.argv[1] is undefined', async () =>
     process.argv[1] = saved;
   }
 });
+
+// Regression: `#game { position: fixed; inset: 0 }` looks like it fills the
+// viewport, but a canvas is a replaced element -- with width:auto it keeps its
+// intrinsic 300x150 and ignores the inset box. Because scene.js sizes the
+// drawing buffer from canvas.clientWidth, the shipped game rendered into a
+// small box in the corner of the screen on every device.
+const SIZED_CANVAS = '<style>#game { position: fixed; inset: 0; width: 100%; height: 100%; }</style>'
+  + '<canvas id="game"></canvas><script src="./vendor/three.js"></script>';
+const UNSIZED_CANVAS = '<style>#game { position: fixed; inset: 0; display: block; }</style>'
+  + '<canvas id="game"></canvas><script src="./vendor/three.js"></script>';
+const NO_CANVAS_RULE = '<style>body { margin: 0; }</style><canvas id="game"></canvas>'
+  + '<script src="./vendor/three.js"></script>';
+
+function gameErrors(html) {
+  return validateZipContents(['index.html', 'vendor/three.js'], 1000, html)
+    .errors.filter((e) => e.includes('#game'));
+}
+
+test('a canvas sized only by inset is rejected', () => {
+  assert.equal(gameErrors(UNSIZED_CANVAS).length, 1);
+});
+
+test('a canvas with explicit width and height passes', () => {
+  assert.deepEqual(gameErrors(SIZED_CANVAS), []);
+});
+
+test('a missing #game rule is rejected', () => {
+  assert.equal(gameErrors(NO_CANVAS_RULE).length, 1);
+});

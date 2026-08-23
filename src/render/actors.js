@@ -88,8 +88,16 @@ const FURNACE_FLAME_GEO = new THREE.ConeGeometry(0.9, 2.0, 6);
 const FURNACE_FLAME_MAT = new THREE.MeshBasicMaterial({ color: 0xff8c1a });
 // Pad inner radius kept a fixed 1 unit inside PAD_RADIUS so the visual ring
 // and the isOnPad collision radius (PAD_RADIUS itself) can never drift apart.
-const FURNACE_PAD_GEO = new THREE.RingGeometry(PAD_RADIUS - 1, PAD_RADIUS, 32);
-const FURNACE_PAD_MAT = new THREE.MeshBasicMaterial({ color: 0xffd36e, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+// A thin, half-transparent ring read as almost nothing against the thawed
+// ground: standing on the furnace and having nothing happen is the worst
+// possible first impression, and walk-in pads are the game's ONLY interaction
+// verb. The pad is now a bright filled disc with a solid rim, so where to stand
+// is unmistakable. Both are sized from PAD_RADIUS, so what is drawn can never
+// drift from what isOnPad actually tests.
+const FURNACE_PAD_GEO = new THREE.CircleGeometry(PAD_RADIUS, 40);
+const FURNACE_PAD_MAT = new THREE.MeshBasicMaterial({ color: 0xffd36e, transparent: true, opacity: 0.4 });
+const FURNACE_PAD_RIM_GEO = new THREE.RingGeometry(PAD_RADIUS - 0.35, PAD_RADIUS, 40);
+const FURNACE_PAD_RIM_MAT = new THREE.MeshBasicMaterial({ color: 0xfff2c4, transparent: true, opacity: 0.95, side: THREE.DoubleSide });
 
 export function createFurnace() {
   const g = new THREE.Group();
@@ -119,6 +127,12 @@ export function createFurnace() {
   pad.rotation.x = -Math.PI / 2;
   pad.position.y = 0.03;
   g.add(pad);
+
+  const padRim = new THREE.Mesh(FURNACE_PAD_RIM_GEO, FURNACE_PAD_RIM_MAT);
+  padRim.rotation.x = -Math.PI / 2;
+  padRim.position.y = 0.04;
+  g.add(padRim);
+
   g.userData.padRadius = PAD_RADIUS;
 
   return g;

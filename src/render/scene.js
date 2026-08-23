@@ -1,15 +1,21 @@
 // src/render/scene.js
 /* global THREE */
-import { MAX_DPR, CAMERA_FOV, CAMERA_HEIGHT, CAMERA_DISTANCE, CAMERA_TARGET_WIDTH } from '../core/constants.js';
+import {
+  MAX_DPR, CAMERA_FOV, CAMERA_HEIGHT, CAMERA_DISTANCE, CAMERA_TARGET_WIDTH,
+  CAMERA_TARGET_DIST, CAMERA_FAR, FOG_NEAR, FOG_FAR,
+} from '../core/constants.js';
 
 export function createScene(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setClearColor(0x0d1b2a);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x9fb6c9, 40, 80);
+  // Fog bounds are derived from the camera geometry, never hand-picked: the
+  // diorama camera sits ~88 units from its target, so a fixed 40-80 range put
+  // the entire world past fog.far and rendered it as one flat grey field.
+  scene.fog = new THREE.Fog(0x9fb6c9, FOG_NEAR, FOG_FAR);
 
-  const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, 200);
+  const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.1, CAMERA_FAR);
   camera.position.set(0, CAMERA_HEIGHT, CAMERA_DISTANCE);
   camera.lookAt(0, 0, 0);
 
@@ -38,8 +44,7 @@ export function createScene(canvas) {
     // full story). Instead, derive the vertical FOV every resize from the
     // ground width that must be visible and the live aspect ratio, so the
     // heat ring is framed correctly regardless of device aspect.
-    const dist = Math.sqrt(CAMERA_HEIGHT * CAMERA_HEIGHT + CAMERA_DISTANCE * CAMERA_DISTANCE);
-    const hHalf = Math.atan((CAMERA_TARGET_WIDTH / 2) / dist);
+    const hHalf = Math.atan((CAMERA_TARGET_WIDTH / 2) / CAMERA_TARGET_DIST);
     const vFov = 2 * Math.atan(Math.tan(hHalf) / camera.aspect);
     camera.fov = vFov * (180 / Math.PI);
 

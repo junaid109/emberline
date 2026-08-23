@@ -52,3 +52,38 @@ export const PAD_RADIUS = 3.2;         // furnace deposit pad radius; consumed b
 export const STICK_RADIUS = 60;        // pointer distance in CSS px at which the stick reads full deflection
 export const STICK_ZONE_X_MAX = 0.6;   // stick activates only left of this fraction of viewport width
 export const STICK_ZONE_Y_MIN = 0.45;  // stick activates only below this fraction of viewport height
+
+// Largest simulation step accepted from the clock. Load-bearing, not hygiene:
+// tickHarvest yields at most one item per call, so a step at or above
+// HARVEST_SECONDS (0.7) would silently discard harvest progress. Keeping this
+// well below that bound is what makes both tickHarvest and tickDeposit safe.
+export const MAX_FRAME_DT = 0.05;
+
+// Distance from the camera to the point it looks at. Every depth-dependent
+// setting below is derived from it, so moving the camera can never again leave
+// fog or the far plane behind at their old values.
+export const CAMERA_TARGET_DIST = Math.sqrt(CAMERA_HEIGHT * CAMERA_HEIGHT + CAMERA_DISTANCE * CAMERA_DISTANCE);
+
+// Worst-case distance from the camera to a corner of the playfield: the ground
+// edge directly opposite the camera, with the player at the origin.
+export const CAMERA_MAX_SCENE_DIST = Math.sqrt(
+  CAMERA_HEIGHT * CAMERA_HEIGHT + (CAMERA_DISTANCE + WORLD_RADIUS) * (CAMERA_DISTANCE + WORLD_RADIUS)
+);
+
+// Fog must START beyond the camera's target, or the player, the furnace, and
+// the heat ring all sit inside it and the scene flattens into one grey wash.
+// It must END beyond the far ground edge, or the back of the playfield
+// dissolves entirely. Both bounds are asserted in tests/scene.test.mjs.
+export const FOG_NEAR = CAMERA_TARGET_DIST + 12;
+export const FOG_FAR = CAMERA_MAX_SCENE_DIST + 70;
+
+// The far clip plane must clear the whole playfield with room to spare.
+export const CAMERA_FAR = CAMERA_MAX_SCENE_DIST + 100;
+
+// How far the snow is DRAWN, as opposed to how far the player may walk
+// (WORLD_RADIUS). Drawing the snow at the walkable radius made the playfield
+// read as a floating island in a void: a hard-edged ellipse with clear colour
+// above and below it. The snowfield instead runs past the far clip distance
+// and dissolves into fog, so the frame is filled and the edge of the world is
+// communicated by the fog, not by a cliff.
+export const GROUND_VISUAL_RADIUS = 220;

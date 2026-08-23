@@ -1,10 +1,10 @@
 // src/render/ground.js
 /* global THREE */
-import { WORLD_RADIUS, RING_MIN, RING_MAX, RIM_BAND } from '../core/constants.js';
+import { GROUND_VISUAL_RADIUS, RING_MIN, RING_MAX, RIM_BAND } from '../core/constants.js';
 
 export function createGround(scene) {
   const snow = new THREE.Mesh(
-    new THREE.CircleGeometry(WORLD_RADIUS, 64),
+    new THREE.CircleGeometry(GROUND_VISUAL_RADIUS, 64),
     new THREE.MeshLambertMaterial({ color: 0xdce8f2 })
   );
   snow.rotation.x = -Math.PI / 2;

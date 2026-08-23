@@ -15,7 +15,12 @@
     -webkit-tap-highlight-color: transparent;
     touch-action: none; overscroll-behavior: none;
   }
-  #game { position: fixed; inset: 0; display: block; }
+  /* width/height are NOT redundant with inset: 0. A canvas is a REPLACED
+     element, so with width:auto it uses its intrinsic size and ignores the
+     inset box entirely. Without these, the canvas renders at its intrinsic
+     300x150 and src/render/scene.js sizes the drawing buffer from its own
+     previous output -- a feedback loop, not a viewport. */
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   #ui {
     position: fixed; pointer-events: none;
     inset: env(safe-area-inset-top) env(safe-area-inset-right)
