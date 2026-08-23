@@ -6,6 +6,21 @@ import { pathToFileURL } from 'node:url';
 
 export const MAX_BYTES = 35 * 1024 * 1024;
 
+// Ceiling on index.html's own size: the game code plus markup should never
+// approach this. It exists purely to catch Three.js (or any other large lib)
+// having been inlined by an accidental bundle: import, which balloons the
+// file by well over a megabyte.
+export const MAX_INDEX_HTML_BYTES = 400 * 1024;
+
+// A string that only appears inside Three.js's own internals (its internal
+// shader-chunk registry), never in application code that merely calls into
+// the THREE global. Verified absent from the current legitimate index.html
+// (which references THREE.* APIs like WebGLRenderer but never this symbol),
+// and present dozens of times in vendor/three.js. If Three.js were ever
+// bundled directly into index.html instead of loaded from ./vendor/three.js,
+// this marker would leak into the file and trip the check below.
+const EMBEDDED_THREE_MARKER = 'ShaderChunk';
+
 /**
  * Pure validator. Takes plain data so it is testable without building a zip.
  * @param {string[]} fileNames  paths inside the zip, forward-slashed
@@ -25,6 +40,40 @@ export function validateZipContents(fileNames, totalBytes, indexHtmlText) {
   if (external) {
     errors.push(`index.html references an external URL: ${external[0].slice(0, 80)}`);
   }
+
+  // Rule: the archive must actually carry Three.js as a vendored file. Without
+  // this, a build run before `npm run vendor` produces a zip containing only
+  // index.html (and maybe assets) that still passes every other check, while
+  // the game itself is a black screen with "THREE is not defined".
+  if (!fileNames.some((f) => f === 'vendor/three.js' || f.startsWith('vendor/'))) {
+    errors.push('zip must contain a vendor/ directory with vendor/three.js — run `npm run vendor` before packaging');
+  }
+
+  // Rule: index.html must load Three.js via a relative <script src>, and must
+  // not reference any script/stylesheet via a root-absolute ("/...") or
+  // drive-absolute ("C:\..." / "C:/...") path — those resolve differently (or
+  // not at all) once the zip is unpacked on a machine other than this one.
+  if (!/src\s*=\s*["']\.\/vendor\/three\.js["']/.test(indexHtmlText)) {
+    errors.push('index.html must load Three.js via a relative <script src="./vendor/three.js">');
+  }
+  const absoluteRef = indexHtmlText.match(/(?:src|href)\s*=\s*["'](\/(?!\/)[^"']*|[A-Za-z]:[\\/][^"']*)["']/);
+  if (absoluteRef) {
+    errors.push(`index.html has a non-relative src/href, which will not resolve after unzipping: ${absoluteRef[0].slice(0, 80)}`);
+  }
+
+  // Rule: Three.js must not be embedded directly in index.html. This is the
+  // mirror-image failure mode to the missing-vendor rule above: if a source
+  // file ever does `import * as THREE from 'three'` instead of using the
+  // `/* global THREE */` convention, esbuild's bundler inlines the whole
+  // library into the built index.html. Two independent signals catch it so
+  // a lucky dodge of one does not slip through.
+  if (indexHtmlText.length > MAX_INDEX_HTML_BYTES) {
+    errors.push(`index.html is ${(indexHtmlText.length / 1024).toFixed(0)}KB, over the ${MAX_INDEX_HTML_BYTES / 1024}KB limit — Three.js may be embedded instead of vendored`);
+  }
+  if (indexHtmlText.includes(EMBEDDED_THREE_MARKER)) {
+    errors.push(`index.html appears to contain Three.js's own source (found internal marker "${EMBEDDED_THREE_MARKER}") — it must be loaded from ./vendor/three.js, not bundled in`);
+  }
+
   return { ok: errors.length === 0, errors };
 }
 

@@ -31,8 +31,19 @@ export function createJoystick(element) {
 
   function onDown(e) {
     if (pointerId !== null) return;
-    if (e.clientX > window.innerWidth * STICK_ZONE_X_MAX) return;   // right side reserved for taps
-    if (e.clientY < window.innerHeight * STICK_ZONE_Y_MIN) return;  // upper area reserved for taps
+    // Same viewport source as src/render/scene.js's resize(): the joystick's
+    // own element (the #game canvas) is the same element the renderer sizes
+    // itself against, so read its displayed CSS box directly. Falls back to
+    // window.innerWidth/Height when the element does not report a client box
+    // (e.g. the fake DOM elements used in tests), which also happens to
+    // match the canvas in production, since #game is `position: fixed;
+    // inset: 0`. Using a different source than the renderer here would let
+    // the activation region drift relative to what the player actually sees
+    // whenever the URL bar is showing or the page is pinch-zoomed.
+    const viewportWidth = element.clientWidth || window.innerWidth;
+    const viewportHeight = element.clientHeight || window.innerHeight;
+    if (e.clientX > viewportWidth * STICK_ZONE_X_MAX) return;   // right side reserved for taps
+    if (e.clientY < viewportHeight * STICK_ZONE_Y_MIN) return;  // upper area reserved for taps
     pointerId = e.pointerId;
     origin = { x: e.clientX, y: e.clientY };
     state.active = true;

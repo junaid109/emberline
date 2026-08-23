@@ -19,9 +19,15 @@ export function createScene(canvas) {
   scene.add(sun);
 
   function resize() {
-    // Use the visual viewport where available so the iOS URL bar does not desync the canvas.
-    const w = Math.round(window.visualViewport?.width ?? window.innerWidth);
-    const h = Math.round(window.visualViewport?.height ?? window.innerHeight);
+    // Read both the drawing-buffer size and the aspect ratio from the same
+    // source: the canvas's own displayed CSS size. #game is `position: fixed;
+    // inset: 0`, so clientWidth/clientHeight track the layout viewport that
+    // the canvas is actually shown at. Deriving aspect from visualViewport
+    // instead (a different, often-smaller box while the URL bar is showing or
+    // the page is pinch-zoomed) would disagree with the drawing buffer's
+    // aspect and stretch the whole scene non-uniformly.
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
@@ -32,6 +38,51 @@ export function createScene(canvas) {
   resize();
   window.addEventListener('resize', resize);
   window.visualViewport?.addEventListener('resize', resize);
+
+  // iOS Safari (and other mobile browsers under memory pressure) can discard
+  // the WebGL context outright — e.g. after a phone call interrupts a
+  // backgrounded tab. Without handling this, requestAnimationFrame keeps
+  // ticking against a dead context: the canvas freezes with no rendering and
+  // no indication anything went wrong. preventDefault() on the loss event is
+  // required for the browser to even attempt restoring the context; on
+  // restore, the honest minimum for a prototype is to ask the player to tap
+  // to reload rather than trying to silently re-create every GPU resource.
+  let resumeOverlay = null;
+
+  function showResumeOverlay() {
+    if (resumeOverlay) return;
+    resumeOverlay = document.createElement('div');
+    resumeOverlay.textContent = 'Display disconnected — tap to resume';
+    Object.assign(resumeOverlay.style, {
+      position: 'fixed',
+      inset: '0',
+      zIndex: '2000',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      textAlign: 'center',
+      padding: '4vmin',
+      background: '#0d1b2a',
+      color: '#eaf2fa',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      fontSize: '5vmin',
+      cursor: 'pointer',
+    });
+    resumeOverlay.addEventListener('pointerdown', () => window.location.reload());
+    document.body.appendChild(resumeOverlay);
+  }
+
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    showResumeOverlay();
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    // Re-creating every GPU resource in place is out of scope for this
+    // prototype; a full reload is the honest, reliable recovery path and the
+    // overlay's tap target already does that, but also handle the browser
+    // restoring the context on its own without a tap in between.
+    showResumeOverlay();
+  });
 
   return { scene, camera, renderer, resize, render: () => renderer.render(scene, camera) };
 }

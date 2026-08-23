@@ -64,7 +64,11 @@ test('rejects an external URL in index.html', () => {
 });
 
 test('does not flag a relative vendor path as external', () => {
-  const r = validateZipContents(['index.html'], 1000, 'fetch("./data/levels.json")');
+  const r = validateZipContents(
+    ['index.html', 'vendor/three.js'],
+    1000,
+    '<script src="./vendor/three.js"></script>\nfetch("./data/levels.json")'
+  );
   assert.equal(r.ok, true);
 });
 
@@ -80,7 +84,7 @@ test('rejects a template-literal (backtick) external URL', () => {
 
 test('does not flag relative paths as false positives', () => {
   const r = validateZipContents(
-    ['index.html'],
+    ['index.html', 'vendor/three.js'],
     1000,
     '<script src="./vendor/three.js"></script>\nfetch("./data/levels.json")'
   );
@@ -105,7 +109,7 @@ test('listZipEntries on a real zip with index.html at the top level reports it a
     assert.ok(entries.includes('index.html'), `expected top-level index.html, got: ${entries.join(', ')}`);
     assert.ok(!entries.some((e) => e !== 'index.html' && e.endsWith('/index.html')));
 
-    const r = validateZipContents(entries, 1000, '<html></html>');
+    const r = validateZipContents(entries, 1000, '<script src="./vendor/three.js"></script>');
     assert.equal(r.ok, true);
     assert.deepEqual(r.errors, []);
   } finally {
@@ -139,6 +143,87 @@ test('listZipEntries on a real zip with index.html nested in a folder reports th
   } finally {
     cleanup();
   }
+});
+
+// --- new rules: catch a package built without `npm run vendor`, or with Three.js inlined ---
+
+test('rejects a zip with no vendor/ entry at all (npm run vendor never ran)', () => {
+  const r = validateZipContents(
+    ['index.html'],
+    1000,
+    '<script src="./vendor/three.js"></script>'
+  );
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('vendor')));
+});
+
+test('accepts a vendor/ entry that is not exactly vendor/three.js, as long as the directory is present', () => {
+  const r = validateZipContents(
+    ['index.html', 'vendor/', 'vendor/three.js'],
+    1000,
+    '<script src="./vendor/three.js"></script>'
+  );
+  assert.equal(r.ok, true);
+});
+
+test('rejects index.html that does not load Three.js via a relative ./vendor/three.js script tag', () => {
+  const r = validateZipContents(
+    ['index.html', 'vendor/three.js'],
+    1000,
+    '<html><body>no script tag here</body></html>'
+  );
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('./vendor/three.js')));
+});
+
+test('rejects a root-absolute script src', () => {
+  const r = validateZipContents(
+    ['index.html', 'vendor/three.js'],
+    1000,
+    '<script src="./vendor/three.js"></script><script src="/vendor/other.js"></script>'
+  );
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('non-relative')));
+});
+
+test('rejects a drive-absolute script src', () => {
+  const r = validateZipContents(
+    ['index.html', 'vendor/three.js'],
+    1000,
+    '<script src="./vendor/three.js"></script><link href="C:\\Users\\dev\\styles.css">'
+  );
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('non-relative')));
+});
+
+test('does not flag a protocol-relative-looking or query-string relative path as absolute', () => {
+  const r = validateZipContents(
+    ['index.html', 'vendor/three.js'],
+    1000,
+    '<script src="./vendor/three.js"></script><link rel="preload" href="./data/levels.json?v=2">'
+  );
+  assert.equal(r.ok, true);
+});
+
+test('rejects index.html over the 400KB size ceiling, as a signal Three.js may be embedded', () => {
+  const bloated = '<script src="./vendor/three.js"></script>' + 'x'.repeat(401 * 1024);
+  const r = validateZipContents(['index.html', 'vendor/three.js'], 1000, bloated);
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('400KB')));
+});
+
+test('rejects index.html containing an internal Three.js marker, meaning the library was inlined', () => {
+  const embedded = '<script src="./vendor/three.js"></script><script>const ShaderChunk = {};</script>';
+  const r = validateZipContents(['index.html', 'vendor/three.js'], 1000, embedded);
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some((e) => e.includes('ShaderChunk')));
+});
+
+test('a small, well-formed index.html referencing THREE.* APIs (but not embedding the library) passes', () => {
+  const legit = '<script src="./vendor/three.js"></script><script>const r = new THREE.WebGLRenderer({});</script>';
+  const r = validateZipContents(['index.html', 'vendor/three.js'], 1000, legit);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.errors, []);
 });
 
 test('listZipEntries throws on a nonexistent zip path rather than returning an empty list', () => {

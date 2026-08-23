@@ -17,15 +17,27 @@
   }
   #game { position: fixed; inset: 0; display: block; }
   #ui {
-    position: fixed; inset: 0; pointer-events: none;
-    padding: env(safe-area-inset-top) env(safe-area-inset-right)
-             env(safe-area-inset-bottom) env(safe-area-inset-left);
+    position: fixed; pointer-events: none;
+    inset: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  #rotate-overlay { display: none; }
+  @media (orientation: landscape) {
+    #rotate-overlay {
+      display: flex; position: fixed; inset: 0; z-index: 1000;
+      align-items: center; justify-content: center; text-align: center;
+      background: #0d1b2a; color: #eaf2fa;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 5vmin; padding: 4vmin;
+      pointer-events: auto;
+    }
   }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <div id="ui"></div>
+<div id="rotate-overlay">Rotate your device to portrait</div>
 <script src="./vendor/three.js"></script>
 <script>
 /*__GAME_CODE__*/
