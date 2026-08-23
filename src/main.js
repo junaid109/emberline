@@ -6,10 +6,11 @@ import { createGround } from './render/ground.js';
 import { createJoystick } from './input/joystick.js';
 import { ringRadius, drainHeat, addFuel } from './core/heat.js';
 import { createNode, tickHarvest } from './core/nodes.js';
-import { createCarry, carryAdd, carryTotal, carryIsFull, carryPop } from './core/carry.js';
-import { createStore, storeAdd } from './core/store.js';
+import { createCarry, carryAdd, carryTotal, carryIsFull } from './core/carry.js';
+import { createStore } from './core/store.js';
+import { isOnPad, createDeposit, tickDeposit } from './core/deposit.js';
 import { createHud } from './ui/hud.js';
-import { PLAYER_SPEED, WORLD_RADIUS, CAMERA_HEIGHT, CAMERA_DISTANCE, HEAT_START, HEAT_DRAIN_DAY, CARRY_CAP, HARVEST_RANGE, DEPOSIT_INTERVAL, HEAT_MAX } from './core/constants.js';
+import { PLAYER_SPEED, WORLD_RADIUS, CAMERA_HEIGHT, CAMERA_DISTANCE, HEAT_START, HEAT_DRAIN_DAY, CARRY_CAP, HARVEST_RANGE, HEAT_MAX } from './core/constants.js';
 
 const view = createScene(document.getElementById('game'));
 const stick = createJoystick(document.getElementById('game'));
@@ -39,7 +40,7 @@ view.scene.add(furnace);
 const store = createStore();
 const hud = createHud(document.getElementById('ui'));
 
-let depositTimer = 0;
+const deposit = createDeposit();
 let lastStackCount = 0;
 
 let last = performance.now();
@@ -83,20 +84,11 @@ function frame(now) {
     lastStackCount = carryTotal(carry);
   }
 
-  const pdx = player.position.x - furnace.position.x;
-  const pdz = player.position.z - furnace.position.z;
-  const onPad = pdx * pdx + pdz * pdz <= furnace.userData.padRadius ** 2;
+  const onPad = isOnPad(player.position.x, player.position.z, furnace.position.x, furnace.position.z, furnace.userData.padRadius);
 
-  if (onPad && carryTotal(carry) > 0) {
-    depositTimer += dt;
-    while (depositTimer >= DEPOSIT_INTERVAL && carryTotal(carry) > 0) {
-      depositTimer -= DEPOSIT_INTERVAL;
-      const kind = carryPop(carry);
-      storeAdd(store, kind, 1);
-      if (kind === 'wood') state.heat = addFuel(state.heat, 6);
-    }
-  } else {
-    depositTimer = 0;
+  const depositedKinds = tickDeposit(deposit, dt, onPad, carry, store);
+  for (const kind of depositedKinds) {
+    if (kind === 'wood') state.heat = addFuel(state.heat, 6);
   }
 
   furnace.userData.setFlame(state.heat / HEAT_MAX);
