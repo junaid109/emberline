@@ -156,4 +156,6 @@ function main() {
 
 // pathToFileURL (not string concatenation) is required for a correct comparison on
 // Windows, where file URLs need a third slash before the drive letter (file:///C:/...).
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+// argv[1] is undefined when this module is imported rather than run (e.g. `node -e`),
+// so guard before converting or the import itself throws.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

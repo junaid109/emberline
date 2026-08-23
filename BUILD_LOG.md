@@ -96,3 +96,108 @@ predates 2026-08-10).
   `100vh` viewport bug, and `touch-action` scroll interception on the joystick.
 - Next session: implementation plan, then the day 1–2 playable slice (joystick, terrain, resource
   nodes, carry-stack, furnace deposit, heat ring).
+
+---
+
+## Session 002 — 2026-08-21 — Playable slice: joystick, harvest, carry stack, furnace, heat ring
+
+Executed the day 1–2 milestone plan as six tasks. Each task was implemented by a fresh AI agent
+working from an extracted task brief, then reviewed by a separate AI agent against the spec and the
+competition's binding constraints, with fixes dispatched and re-reviewed until clean. A final
+whole-branch review followed. 13 commits.
+
+### Decisions locked
+
+1. **Architecture: pure logic separated from rendering.** `src/core/` contains no Three.js reference
+   at all and is unit-testable headlessly with `node --test`; `src/render/`, `src/input/`, and
+   `src/ui/` consume it. The dependency direction points one way only. This is what makes the
+   economy, heat model, and deposit cadence testable, and those are exactly the parts that the
+   tuning pass will need to change safely.
+2. **Three.js is bundled to an IIFE global, not an ES module.** The rules say to test from a local
+   server, but if a judge opens `index.html` directly, an import map fails on `file://` and they see
+   a black screen. A plain `<script src="./vendor/three.js">` works either way. Our own game code
+   still ships fully readable and unminified as the rules require.
+3. **Packaging is validated automatically, before any game code existed.** The competition has
+   silent auto-fail conditions; `npm run package` refuses to emit a zip that violates them.
+4. **Every tunable number lives in `src/core/constants.js`.** Days 12–14 are a tuning pass, and
+   hunting magic numbers across ten files would waste that window.
+5. **Camera reframed to a diorama view** so the heat ring is actually visible (see below).
+
+### Prompted
+
+- Asked for the packaging pipeline and its validator to be built first, before any gameplay.
+- Asked for each task to be implemented test-first, and for the implementer to report anything it
+  could not verify rather than marking it done.
+- Asked reviewers to hand-verify the load-bearing maths with concrete numbers rather than reading
+  for plausibility, and to state explicitly whether a test would pass against a broken implementation.
+- Asked the final review for what only a whole-branch view reveals — cross-cutting interactions that
+  per-task reviews structurally cannot see.
+
+### Result
+
+The core loop works end to end: joystick out to a tree, auto-harvest with logs visibly stacking on
+the player's back, haul back, stand on the furnace pad, logs drain off one at a time, and the thawed
+ring physically grows.
+
+The AI did the heavy lifting throughout, and review caught real defects the implementers did not.
+The most significant, all found by AI review rather than by hand:
+
+- **The packaging validator was validating a fabricated file list.** It reconstructed the archive
+  contents from the source tree with `index.html` hardcoded, so the "index.html must be at the zip's
+  top level" check could never fail. Now reads the real archive entries.
+- **The validator would have green-lit a game containing no Three.js.** `vendor/` is gitignored, and
+  the packaging step dropped missing paths silently. Now checks vendor presence, relative
+  referencing, and that the library has not been accidentally inlined into `index.html`.
+- **The safe-area insets silently did nothing.** The overlay used `padding`, but the containing
+  block for an absolutely positioned child is the *padding box* — so the HUD sat at 12px from the
+  viewport edge, inside the iPhone Dynamic Island. Changed to `inset`.
+- **The renderer took its aspect ratio and its display size from two different viewports**, so the
+  scene stretched non-uniformly whenever the mobile URL bar was showing.
+- **The joystick activated across the whole left 60% of the screen**, not the lower-left, because the
+  gate had no vertical condition. It would have swallowed the rally taps planned for the next
+  milestone.
+- **The heat ring was wider than the camera could show.** A portrait camera specified by *vertical*
+  FOV has its horizontal frame crushed by the aspect ratio: 21.6° horizontal, about 12.5 world units,
+  against a ring 31–44 units across. The player would never have perceived a ring at all — the
+  signature mechanic, invisible. Fixed by deriving vertical FOV from a target horizontal width,
+  recomputed on resize so aspect can never crush it again. Now 52 world units visible; the full ring
+  fits with margin.
+- **The heat-ring rim was a fixed ratio of the radius**, so it was thinnest exactly at low heat when
+  the player most needs to read it. Now a constant world-space band.
+
+### Hand edits
+
+Minimal, and each is recorded with its cause:
+
+- `node --test tests/` fails on Node v26 / Windows, so the test script uses an explicit glob. Node's
+  directory mode was re-investigated later and genuinely still fails here, so the glob stayed.
+- `tools/package.mjs`'s main-guard compared `import.meta.url` against a string-concatenated file URL,
+  which never matches on Windows (a file URL needs three slashes before the drive letter). This
+  silently made `npm run package` a no-op. Fixed with `pathToFileURL`.
+- That same guard then threw on import wherever `process.argv[1]` is undefined. Found during final
+  verification, guarded, and covered by a regression test.
+
+### Verified
+
+- 73 tests passing via `node --test`.
+- `npm run package` emits `emberline.zip` at 0.29MB against the 35MB cap.
+- Archive entries confirmed programmatically as exactly `index.html` and `vendor/three.js`, with
+  `index.html` at the top level.
+- `index.html` contains no `http://` or `https://` reference; 531 lines, longest line 154 characters,
+  unminified and readable.
+- Device pixel ratio confirmed capped at 2 (393x852 CSS produced a 786x1704 backing buffer).
+- Regression tests were validated by mutation: the deposit tests were checked against three
+  deliberately broken variants (instant-dump, missing timer reset, flipped pad condition) and each
+  mutant failed the suite before being reverted.
+
+### Open / next
+
+- **Not yet verified on physical hardware.** Every device check is outstanding on the Galaxy S24
+  Ultra and iPhone 16. Playability is 25% of the score, so this is the top priority.
+- **`src/core/world.js` was specified in the plan and never built.** All world state and system
+  ordering currently live in `src/main.js`'s frame loop, which has no automated coverage. The next
+  five milestones add day/night phases, gates, wolves, and win/lose on top of it. Extract before
+  Milestone 2, while the frame loop is still small.
+- Build Log guidance PDF still not readable (the Drive link requires sign-in); this format follows
+  the Devpost description and should be reconciled against the official template.
+- Next: Milestone 2 — day/night cycle, dusk telegraph, three gates, wolves, guard squad, rally taps.

@@ -235,3 +235,16 @@ test('listZipEntries throws on a nonexistent zip path rather than returning an e
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Regression: the module used to call pathToFileURL(process.argv[1]) unguarded at
+// import time, so importing it where argv[1] is undefined threw ERR_INVALID_ARG_TYPE.
+test('the module can be imported when process.argv[1] is undefined', async () => {
+  const saved = process.argv[1];
+  try {
+    process.argv[1] = undefined;
+    const mod = await import(`../tools/package.mjs?guard=${saved ? 1 : 0}`);
+    assert.equal(typeof mod.validateZipContents, 'function');
+  } finally {
+    process.argv[1] = saved;
+  }
+});
