@@ -13,7 +13,7 @@ import {
   HEAT_START, HEAT_DRAIN_DAY, HEAT_PER_WOOD, CARRY_CAP, HARVEST_RANGE,
   NODE_COUNT, NODE_RING_BASE, NODE_RING_STEP, NODE_AMOUNT, PAD_RADIUS,
   MAX_FRAME_DT, HEAT_DRAIN_NIGHT_MULT, WOLVES_FIRST_NIGHT, WOLVES_PER_NIGHT,
-  WOLF_SPAWN_INTERVAL, GATE_RING_RADIUS,
+  WOLF_SPAWN_INTERVAL, GATE_RING_RADIUS, WOLF_SPAWN_SPREAD,
 } from './constants.js';
 import { drainHeat, addFuel } from './heat.js';
 import { createNode, tickHarvest } from './nodes.js';
@@ -116,10 +116,29 @@ export function rallyToward(world, x, z) {
   return gate;
 }
 
-/** Wolves spawn just outside a gate, so they walk in through the lane. */
+/**
+ * Wolves spawn just outside a gate, so they walk in through the lane.
+ *
+ * Spread across the mouth of the gate rather than stacked on one point: every
+ * wolf walks a straight line to the same furnace, so identical spawn positions
+ * produce a single-file column that reads as a queue instead of a pack. The
+ * offset is perpendicular to the approach, so the lane still reads as a lane.
+ */
 function spawnAtGate(world, gate) {
   const k = (GATE_RING_RADIUS + 3) / GATE_RING_RADIUS;
-  world.wolves.push(createWolf(gate.x * k, gate.z * k));
+  const inward = Math.hypot(gate.x, gate.z) || 1;
+
+  // Unit vector perpendicular to the gate's inward direction.
+  const perpX = -gate.z / inward;
+  const perpZ = gate.x / inward;
+
+  const spread = (world.roll() - 0.5) * 2 * WOLF_SPAWN_SPREAD;
+  const depth = world.roll() * WOLF_SPAWN_SPREAD;   // stagger along the approach too
+
+  world.wolves.push(createWolf(
+    gate.x * k + perpX * spread - (gate.x / inward) * depth,
+    gate.z * k + perpZ * spread - (gate.z / inward) * depth,
+  ));
 }
 
 /**

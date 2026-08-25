@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import {
   CAMERA_HEIGHT, CAMERA_DISTANCE, CAMERA_TARGET_WIDTH, CAMERA_TARGET_DIST,
   CAMERA_MAX_SCENE_DIST, CAMERA_FAR, FOG_NEAR, FOG_FAR,
-  WORLD_RADIUS, RING_MAX, GROUND_VISUAL_RADIUS,
+  WORLD_RADIUS, RING_MAX, GROUND_VISUAL_RADIUS, GATE_RING_RADIUS,
 } from '../src/core/constants.js';
 
 /**
@@ -74,4 +74,21 @@ test('the snow is drawn well past the walkable edge, so the world has no visible
   assert.ok(GROUND_VISUAL_RADIUS > WORLD_RADIUS * 2);
   assert.ok(GROUND_VISUAL_RADIUS > FOG_FAR,
     'the snowfield must outrun fog.far, or it ends in a hard edge against the clear colour');
+});
+
+test('all three gates fit inside the frame, with margin', () => {
+  // The dusk telegraph is the entire night decision. A lit gate pinned to the
+  // frame edge — which is what a screenshot caught it doing — makes that
+  // decision unreadable on a phone.
+  for (const aspect of [393 / 852, 412 / 883, 375 / 812]) {
+    const halfWidth = visibleGroundWidth(aspect) / 2;
+    assert.ok(halfWidth > GATE_RING_RADIUS * 1.06,
+      `at aspect ${aspect.toFixed(3)} the frame half-width is ${halfWidth.toFixed(1)}, ` +
+      `against gates at ${GATE_RING_RADIUS}`);
+  }
+});
+
+test('the heat ring still fits once the frame is sized for the gates', () => {
+  assert.ok(GATE_RING_RADIUS > RING_MAX, 'gates must stay outside the thawed ground');
+  assert.ok(visibleGroundWidth(393 / 852) > 2 * RING_MAX);
 });

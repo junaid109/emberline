@@ -12,6 +12,7 @@ import {
 } from './render/actors.js';
 import { createGround } from './render/ground.js';
 import { createGroundPicker } from './render/pick.js';
+import { syncPool, faceToward } from './render/sync.js';
 import { createJoystick } from './input/joystick.js';
 import { createTapper } from './input/tap.js';
 import { ringRadius } from './core/heat.js';
@@ -71,15 +72,11 @@ function buildWorldMeshes() {
 }
 buildWorldMeshes();
 
-/** Returns a mesh for wolf slot i, growing the pool only when a night needs it. */
-function wolfMeshAt(i) {
-  while (wolfPool.length <= i) {
-    const mesh = createWolfMesh();
-    mesh.visible = false;
-    view.scene.add(mesh);
-    wolfPool.push(mesh);
-  }
-  return wolfPool[i];
+/** Builds one wolf mesh and puts it in the scene. Called only when the pool grows. */
+function spawnWolfMesh() {
+  const mesh = createWolfMesh();
+  view.scene.add(mesh);
+  return mesh;
 }
 
 createTapper(canvas, (x, y) => {
@@ -134,14 +131,7 @@ function frame(now) {
     gateMeshes[i].userData.setTelegraphed(world.gates[i].telegraphed, pulse);
   }
 
-  for (let i = 0; i < wolfPool.length; i++) {
-    const wolf = world.wolves[i];
-    const mesh = wolfPool[i];
-    mesh.visible = Boolean(wolf);
-    if (!wolf) continue;
-    mesh.position.set(wolf.x, 0, wolf.z);
-    mesh.rotation.y = Math.atan2(world.pad.x - wolf.x, world.pad.z - wolf.z);
-  }
+  syncPool(wolfPool, world.wolves, spawnWolfMesh, faceToward(world.pad.x, world.pad.z));
 
   squadMesh.position.set(world.squad.x, 0, world.squad.z);
   squadMesh.userData.setEngaging(world.squad.engaging);

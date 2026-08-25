@@ -24,6 +24,7 @@ const { createScene } = await import('../src/render/scene.js');
 const actors = await import('../src/render/actors.js');
 const { createGround } = await import('../src/render/ground.js');
 const { createGroundPicker } = await import('../src/render/pick.js');
+const { syncPool, faceToward } = await import('../src/render/sync.js');
 const { createJoystick } = await import('../src/input/joystick.js');
 const { createTapper, isTapZone, isTap } = await import('../src/input/tap.js');
 const { createWorld, tickWorld, rallyToward } = await import('../src/core/world.js');
@@ -101,6 +102,20 @@ test('a gate exposes setTelegraphed and lights up when called', () => {
   assert.equal(lightOf(g).intensity, 0, 'an unlit gate must emit nothing');
   g.userData.setTelegraphed(true, 1);
   assert.ok(lightOf(g).intensity > 0, 'a telegraphed gate must be visibly lit');
+});
+
+test('the warning beam is fully invisible on an unlit gate', () => {
+  // A beam that never quite reaches zero opacity would leave every gate faintly
+  // marked, which is exactly as useless as marking none of them.
+  const g = actors.createGateMesh(0, -26);
+  const beams = g.children.filter((c) => c.material && 'opacity' in c.material);
+  assert.ok(beams.length > 0);
+
+  g.userData.setTelegraphed(false, 1);
+  for (const b of beams) assert.equal(b.material.opacity, 0);
+
+  g.userData.setTelegraphed(true, 1);
+  assert.ok(beams.some((b) => b.material.opacity > 0.3), 'a lit gate needs a clearly visible beam');
 });
 
 test('a gate faces the furnace rather than sitting at a random angle', () => {
@@ -256,4 +271,79 @@ test('every field the frame loop reads off an event actually exists', () => {
   for (const key of ['heat', 'player', 'carry', 'store', 'cycle', 'gates', 'wolves', 'squad', 'pad', 'over', 'kills']) {
     assert.ok(key in world, `main.js reads world.${key} every frame`);
   }
+});
+
+// --- mesh pooling ----------------------------------------------------------
+//
+// Regression: the first version of this logic lived inline in the frame loop
+// and iterated the POOL instead of the entity list, so the pool never grew past
+// zero. Wolves existed, moved, and mauled the furnace completely invisibly.
+// Nothing threw and nothing logged. Only a screenshot found it.
+
+function fakeMesh() {
+  return { visible: false, position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 } };
+}
+
+test('an empty pool grows to cover the entities it is given', () => {
+  const pool = [];
+  const shown = syncPool(pool, [{ x: 1, z: 2 }, { x: 3, z: 4 }], fakeMesh);
+  assert.equal(shown, 2);
+  assert.equal(pool.length, 2, 'the pool must grow — this is the bug that shipped invisible wolves');
+  assert.ok(pool.every((m) => m.visible));
+  assert.deepEqual(pool.map((m) => [m.position.x, m.position.z]), [[1, 2], [3, 4]]);
+});
+
+test('the pool is reused rather than reallocated between waves', () => {
+  const pool = [];
+  syncPool(pool, [{ x: 0, z: 0 }, { x: 1, z: 1 }, { x: 2, z: 2 }], fakeMesh);
+  const identities = [...pool];
+
+  syncPool(pool, [{ x: 9, z: 9 }], fakeMesh);
+  assert.equal(pool.length, 3, 'meshes should be kept, not destroyed');
+  assert.deepEqual([...pool], identities, 'the same mesh objects must be reused');
+});
+
+test('surplus meshes are hidden, not left standing where a wolf died', () => {
+  const pool = [];
+  syncPool(pool, [{ x: 0, z: 0 }, { x: 1, z: 1 }], fakeMesh);
+  syncPool(pool, [{ x: 0, z: 0 }], fakeMesh);
+  assert.equal(pool[0].visible, true);
+  assert.equal(pool[1].visible, false, 'a killed wolf must disappear');
+});
+
+test('an empty entity list hides everything', () => {
+  const pool = [];
+  syncPool(pool, [{ x: 0, z: 0 }], fakeMesh);
+  assert.equal(syncPool(pool, [], fakeMesh), 0);
+  assert.ok(pool.every((m) => !m.visible));
+});
+
+test('create is called only when the pool actually has to grow', () => {
+  const pool = [];
+  let built = 0;
+  const counting = () => { built++; return fakeMesh(); };
+  syncPool(pool, [{ x: 0, z: 0 }, { x: 1, z: 1 }], counting);
+  assert.equal(built, 2);
+  syncPool(pool, [{ x: 0, z: 0 }, { x: 1, z: 1 }], counting);
+  assert.equal(built, 2, 'a steady wave must not allocate a single new mesh');
+});
+
+test('faceToward turns a wolf to look at the furnace', () => {
+  const pool = [];
+  syncPool(pool, [{ x: 0, z: 10 }], fakeMesh, faceToward(0, 0));
+  assert.ok(Math.abs(pool[0].rotation.y - Math.PI) < 1e-9, 'a wolf due south should face north');
+});
+
+test('a live world drives the pool end to end', () => {
+  // The integration the frame loop actually performs: wolves appear during a
+  // night and each one gets a visible mesh.
+  const world = createWorld(() => 0);
+  const pool = [];
+  for (let i = 0; i < 40000 && world.wolves.length === 0; i++) {
+    world.heat = 100;
+    tickWorld(world, 0.05, 0, 0);
+  }
+  assert.ok(world.wolves.length > 0, 'no wolves ever spawned');
+  syncPool(pool, world.wolves, fakeMesh, faceToward(world.pad.x, world.pad.z));
+  assert.equal(pool.filter((m) => m.visible).length, world.wolves.length);
 });

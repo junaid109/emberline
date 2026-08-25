@@ -19,11 +19,19 @@ export const CAMERA_HEIGHT = 70;
 export const CAMERA_DISTANCE = 54;     // behind the player, giving the tilted three-quarter view
 export const WORLD_RADIUS = 34;        // playfield half-extent in world units
 
-// Width of ground, in world units, that must be visible horizontally so the
-// heat ring (the game's signature mechanic) is actually legible on screen.
-// Derived from the ring's full diameter at max heat (2 * RING_MAX = 44) plus
-// ~18% margin so the ring doesn't touch the screen edges: 44 * 1.18 ~= 52.
-export const CAMERA_TARGET_WIDTH = 52;
+// Width of ground, in world units, that must be visible horizontally.
+//
+// Originally derived from the heat ring alone (2 * RING_MAX = 44, plus margin).
+// That framed the ring correctly but put the three gates exactly on the frame
+// edge, where a screenshot showed the dusk telegraph — the single piece of
+// information the whole night decision rests on — reduced to a few red pixels
+// half off screen.
+//
+// It is now derived from the gates instead, since they sit further out than the
+// ring does: 2 * GATE_RING_RADIUS = 52, plus ~19% so a lit gate sits clearly
+// inside the frame rather than on its boundary. The heat ring still dominates
+// the view; it simply no longer sets the bound.
+export const CAMERA_TARGET_WIDTH = 62;
 
 export const HEAT_MAX = 100;
 export const HEAT_START = 60;
@@ -135,3 +143,9 @@ export const SQUAD_DPS = 2.2;
 // without reinterpreting orders the player already gave.
 export const TAP_MAX_SECONDS = 0.4;
 export const TAP_MAX_DRIFT = 18;       // CSS pixels
+
+// Wolves spread across the mouth of a gate instead of stacking on one point.
+// Every wolf walks a straight line to the same furnace, so identical spawns
+// produce a single-file column that reads as a queue rather than a pack.
+// Kept well under the gap between gates, so a lane still reads as one lane.
+export const WOLF_SPAWN_SPREAD = 3.2;

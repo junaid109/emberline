@@ -12,3 +12,6 @@ assets/raw/
 .superpowers/
 vendor/
 /index.html
+
+# dev capture output from tools/harness.mjs
+.shots/

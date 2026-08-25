@@ -233,10 +233,23 @@ export function createGateMesh(x, z) {
   g.add(arch);
 
   // Per-gate material: each lamp changes colour independently.
+  //
+  // MeshBasicMaterial ignores lighting, so the lamp stays exactly as bright at
+  // midnight as at noon. It is oversized on purpose: at this camera distance a
+  // realistically-scaled lamp is about three pixels, and this is the single
+  // piece of information the night's decision is made from.
   const lampMat = new THREE.MeshBasicMaterial({ color: 0x3a4654 });
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 10), lampMat);
-  lamp.position.y = 4.3;
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(1.15, 12, 12), lampMat);
+  lamp.position.y = 4.8;
   g.add(lamp);
+
+  // A vertical shaft above the lit gate. A tall bright column survives being
+  // small on screen far better than a dot does, and it stays visible even when
+  // the gate itself is near the edge of the frame.
+  const beamMat = new THREE.MeshBasicMaterial({ color: 0xff6a52, transparent: true, opacity: 0 });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.9, 14, 8, 1, true), beamMat);
+  beam.position.y = 11;
+  g.add(beam);
 
   const warnLight = new THREE.PointLight(0xff4d3d, 0, 22, 2);
   warnLight.position.y = 4.3;
@@ -249,6 +262,7 @@ export function createGateMesh(x, z) {
   g.userData.setTelegraphed = (on, pulse) => {
     lampMat.color.setHex(on ? 0xff4d3d : 0x3a4654);
     warnLight.intensity = on ? 1.2 + pulse * 1.8 : 0;
+    beamMat.opacity = on ? 0.22 + pulse * 0.3 : 0;
   };
 
   return g;

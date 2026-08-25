@@ -9,6 +9,7 @@ import { wolvesForNight, gatesForNight, phaseDuration } from '../src/core/cycle.
 import {
   MAX_FRAME_DT, HEAT_MAX, HEAT_DRAIN_DAY, HEAT_DRAIN_NIGHT_MULT,
   WOLVES_FIRST_NIGHT, WOLVES_PER_NIGHT, TOTAL_NIGHTS, GATE_RING_RADIUS,
+  WOLF_SPAWN_SPREAD, GATE_COUNT, RING_MAX,
 } from '../src/core/constants.js';
 
 const STEP = MAX_FRAME_DT;
@@ -207,4 +208,55 @@ test('surviving all seven nights wins', () => {
   assert.ok(won, 'the run never reached a win');
   assert.equal(w.over, 'won');
   assert.equal(w.cycle.night, TOTAL_NIGHTS);
+});
+
+test('wolves spread across the gate mouth instead of stacking in single file', () => {
+  // A screenshot caught every wolf spawning on the identical point and walking
+  // the identical line to the furnace: a conga line, not a pack.
+  let roll = 0;
+  const w = createWorld(() => { roll = (roll + 0.37) % 1; return roll; });
+  advanceTo(w, 'night');
+
+  for (let i = 0; i < 4000 && w.wolves.length < 3; i++) {
+    w.heat = HEAT_MAX;
+    tickWorld(w, STEP, 0, 0);
+  }
+  assert.ok(w.wolves.length >= 3, 'not enough wolves spawned to compare');
+
+  const positions = w.wolves.map((x) => `${x.x.toFixed(3)},${x.z.toFixed(3)}`);
+  assert.equal(new Set(positions).size, positions.length, 'two wolves occupy the same point');
+});
+
+test('spawn spread never pushes a wolf toward the wrong gate', () => {
+  // The lane must still read as one lane. The spread has to stay well under the
+  // distance between neighbouring gates or the telegraph becomes ambiguous.
+  const gates = createWorld(() => 0).gates;
+  const gap = Math.hypot(gates[0].x - gates[1].x, gates[0].z - gates[1].z);
+  assert.ok(WOLF_SPAWN_SPREAD * 2 < gap / 2,
+    `spread ${WOLF_SPAWN_SPREAD * 2} is too wide for gates ${gap.toFixed(1)} apart`);
+  assert.equal(GATE_COUNT, 3);
+});
+
+test('spawned wolves still start outside the heat ring', () => {
+  // Measured at the instant of spawn. Reading positions later would just be
+  // measuring how far they had already walked.
+  const w = createWorld(() => 0.99);           // worst case: spread pushed fully inward
+  advanceTo(w, 'night');
+
+  const spawnRadii = [];
+  for (let i = 0; i < 4000 && spawnRadii.length < 3; i++) {
+    w.heat = HEAT_MAX;
+    const ev = tickWorld(w, STEP, 0, 0);
+    for (let n = 0; n < ev.wolvesSpawned; n++) {
+      const fresh = w.wolves[w.wolves.length - 1 - n];
+      spawnRadii.push(Math.hypot(fresh.x, fresh.z));
+    }
+  }
+
+  assert.ok(spawnRadii.length >= 3, 'not enough wolves spawned to measure');
+  for (const r of spawnRadii) {
+    assert.ok(r > RING_MAX, `a wolf spawned at radius ${r.toFixed(1)}, inside the thawed ground`);
+    assert.ok(r > GATE_RING_RADIUS - WOLF_SPAWN_SPREAD - 1e-9,
+      'a wolf spawned well inside the treeline');
+  }
 });
