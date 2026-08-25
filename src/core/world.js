@@ -12,13 +12,17 @@ import {
   PLAYER_SPEED, WORLD_RADIUS, WORLD_EDGE_MARGIN,
   HEAT_START, HEAT_DRAIN_DAY, HEAT_PER_WOOD, CARRY_CAP, HARVEST_RANGE,
   NODE_COUNT, NODE_RING_BASE, NODE_RING_STEP, NODE_AMOUNT, PAD_RADIUS,
-  MAX_FRAME_DT,
+  MAX_FRAME_DT, HEAT_DRAIN_NIGHT_MULT, WOLVES_FIRST_NIGHT, WOLVES_PER_NIGHT,
+  WOLF_SPAWN_INTERVAL, GATE_RING_RADIUS,
 } from './constants.js';
 import { drainHeat, addFuel } from './heat.js';
 import { createNode, tickHarvest } from './nodes.js';
 import { createCarry, carryAdd, carryTotal, carryIsFull } from './carry.js';
 import { createStore } from './store.js';
 import { isOnPad, createDeposit, tickDeposit } from './deposit.js';
+import { createCycle, tickCycle, wolvesForNight, gatesForNight } from './cycle.js';
+import { createGates, nearestGate, telegraph, telegraphedGates } from './gates.js';
+import { createWolf, tickWolves, reapWolves, createSquad, rallySquad, tickSquad } from './threat.js';
 
 /**
  * Places the starting resource nodes on three interleaved rings around the
@@ -35,9 +39,21 @@ export function spawnNodes(count = NODE_COUNT) {
   return nodes;
 }
 
-export function createWorld() {
+export function createWorld(roll = Math.random) {
+  const gates = createGates();
   return {
+    roll,
     heat: HEAT_START,
+    cycle: createCycle(),
+    gates,
+    wolves: [],
+    // The squad starts at the gate the camera faces, so its first appearance
+    // is on screen rather than somewhere the player has to go looking for.
+    squad: createSquad(gates[0].x, gates[0].z),
+    spawnTimer: 0,
+    pendingWolves: 0,
+    kills: 0,
+    over: null,          // null | 'won' | 'lost'
     player: { x: 0, z: 8, angle: 0 },
     carry: createCarry(CARRY_CAP),
     store: createStore(),
@@ -47,7 +63,11 @@ export function createWorld() {
 
     // Reused every frame rather than reallocated. Consumers must read it
     // before the next tickWorld call; nobody retains it across frames.
-    events: { harvestedKind: null, depletedNode: -1, deposited: null, stackChanged: false, onPad: false },
+    events: {
+      harvestedKind: null, depletedNode: -1, deposited: null,
+      stackChanged: false, onPad: false,
+      phaseEntered: null, wolvesSpawned: 0, wolvesKilled: 0, mauled: false,
+    },
   };
 }
 
@@ -83,17 +103,76 @@ function movePlayer(player, dirX, dirZ, dt) {
 }
 
 /**
+ * Rally the guard squad to whichever gate is nearest a world point.
+ *
+ * The renderer resolves a screen tap to a ground position and calls this; the
+ * snap-to-nearest-gate is deliberate, so a sloppy thumb on a moving phone still
+ * produces the order the player meant.
+ */
+export function rallyToward(world, x, z) {
+  const gate = nearestGate(world.gates, x, z);
+  if (!gate) return null;
+  rallySquad(world.squad, gate.x, gate.z);
+  return gate;
+}
+
+/** Wolves spawn just outside a gate, so they walk in through the lane. */
+function spawnAtGate(world, gate) {
+  const k = (GATE_RING_RADIUS + 3) / GATE_RING_RADIUS;
+  world.wolves.push(createWolf(gate.x * k, gate.z * k));
+}
+
+/**
+ * Runs the phase clock and everything gated on it: the dusk telegraph, the
+ * night wolf spawns, and the win check.
+ */
+function tickNightCycle(world, dt, ev) {
+  const entered = tickCycle(world.cycle, dt);
+  ev.phaseEntered = entered;
+
+  if (entered === 'won') {
+    world.over = 'won';
+    return;
+  }
+
+  if (entered === 'dusk') {
+    // The telegraph is rolled ONCE, at dusk, and the same gates are what
+    // actually spawn. If these ever diverge the player is being lied to, and
+    // the rally decision becomes a coin flip.
+    telegraph(world.gates, gatesForNight(world.cycle.night), world.roll);
+    world.pendingWolves = wolvesForNight(world.cycle.night, WOLVES_FIRST_NIGHT, WOLVES_PER_NIGHT);
+    world.spawnTimer = 0;
+  }
+
+  if (world.cycle.phase === 'night' && world.pendingWolves > 0) {
+    world.spawnTimer += dt;
+    while (world.spawnTimer >= WOLF_SPAWN_INTERVAL && world.pendingWolves > 0) {
+      world.spawnTimer -= WOLF_SPAWN_INTERVAL;
+      const lanes = telegraphedGates(world.gates);
+      if (lanes.length === 0) break;
+      const lane = lanes[world.pendingWolves % lanes.length];
+      spawnAtGate(world, lane);
+      world.pendingWolves -= 1;
+      ev.wolvesSpawned += 1;
+    }
+  }
+}
+
+/**
  * Advances the world by one already-clamped step.
  *
  * System order is deliberate and must not be shuffled:
- *   1. move       — everything downstream reads the player's final position
- *   2. drain heat — so that (4) can only ever add to a post-drain value
- *   3. harvest    — fills the carry
- *   4. deposit    — empties the carry into the store, converting wood to heat
+ *   1. cycle      — sets the phase everything below is conditioned on
+ *   2. move       — everything downstream reads the player's final position
+ *   3. drain heat — so that (5) can only ever add to a post-drain value
+ *   4. harvest    — fills the carry
+ *   5. deposit    — empties the carry into the store, converting wood to heat
+ *   6. threat     — squad kills wolves, surviving wolves chew the furnace
  *
  * Draining before depositing means every consumer of world.heat this frame
  * (ring radius, flame height, HUD) reads one settled number, never a stale
- * pre-drain or pre-deposit snapshot.
+ * pre-drain or pre-deposit snapshot. Threat runs last so that a wolf's damage
+ * is applied to the same settled value.
  */
 export function tickWorld(world, dt, dirX, dirZ) {
   const ev = world.events;
@@ -102,11 +181,23 @@ export function tickWorld(world, dt, dirX, dirZ) {
   ev.deposited = null;
   ev.stackChanged = false;
 
+  ev.phaseEntered = null;
+  ev.wolvesSpawned = 0;
+  ev.wolvesKilled = 0;
+  ev.mauled = false;
+
+  if (world.over) return ev;
+
   const before = carryTotal(world.carry);
+
+  tickNightCycle(world, dt, ev);
 
   movePlayer(world.player, dirX, dirZ, dt);
 
-  world.heat = drainHeat(world.heat, dt, HEAT_DRAIN_DAY);
+  // Night costs multiples of what day costs. Surviving the dark is what the
+  // day's hauling was FOR, and this multiplier is the whole reason it matters.
+  const nightly = world.cycle.phase === 'night' ? HEAT_DRAIN_NIGHT_MULT : 1;
+  world.heat = drainHeat(world.heat, dt, HEAT_DRAIN_DAY * nightly);
 
   if (!carryIsFull(world.carry)) {
     for (let i = 0; i < world.nodes.length; i++) {
@@ -136,6 +227,18 @@ export function tickWorld(world, dt, dirX, dirZ) {
       if (kind === 'wood') world.heat = addFuel(world.heat, HEAT_PER_WOOD);
     }
   }
+
+  ev.wolvesKilled = tickSquad(world.squad, dt, world.wolves);
+  world.kills += ev.wolvesKilled;
+  reapWolves(world.wolves);
+
+  const mauling = tickWolves(world.wolves, dt, world.pad.x, world.pad.z);
+  if (mauling > 0) {
+    ev.mauled = true;
+    world.heat = drainHeat(world.heat, 1, mauling);   // mauling is already dt-scaled
+  }
+
+  if (world.heat <= 0) world.over = 'lost';
 
   ev.stackChanged = carryTotal(world.carry) !== before;
   return ev;

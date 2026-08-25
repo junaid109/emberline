@@ -87,3 +87,51 @@ export const CAMERA_FAR = CAMERA_MAX_SCENE_DIST + 100;
 // and dissolves into fog, so the frame is filled and the edge of the world is
 // communicated by the fog, not by a cliff.
 export const GROUND_VISUAL_RADIUS = 220;
+
+// --- Day/night cycle -------------------------------------------------------
+// Seven nights, each a little longer and colder than the last. The whole arc is
+// ~10 minutes, which is the session length the competition guidance asks for.
+export const TOTAL_NIGHTS = 7;
+export const DAY_SECONDS_FIRST = 60;
+export const DAY_SECONDS_LAST = 45;    // days shorten as nights lengthen
+export const DUSK_SECONDS = 5;         // the telegraph window: the rally decision
+export const NIGHT_SECONDS_FIRST = 25;
+export const NIGHT_SECONDS_LAST = 50;
+export const DAWN_SECONDS = 3;         // tally card
+
+// At night the furnace burns far faster, so surviving the dark costs the fuel
+// you spent the day hauling. This is the pressure the whole loop hangs on.
+export const HEAT_DRAIN_NIGHT_MULT = 2.5;
+
+// --- Gates -----------------------------------------------------------------
+// Three fixed approach lanes. Wolves only ever come down a gate, so the rally
+// decision is always a choice between three known places, never a search.
+export const GATE_COUNT = 3;
+export const GATE_RING_RADIUS = 26;    // out at the treeline, outside RING_MAX
+
+// --- Wolves ----------------------------------------------------------------
+export const WOLF_SPEED = 3.4;         // slower than PLAYER_SPEED: you can always outrun them
+export const WOLF_HP = 3;
+export const WOLF_SPAWN_INTERVAL = 1.6;
+export const WOLVES_FIRST_NIGHT = 3;
+export const WOLVES_PER_NIGHT = 2;     // added per night thereafter
+
+// A wolf that reaches the furnace mauls it: heat drains hard until it is
+// killed. This is the fail state with a face on it, rather than a silent
+// number ticking down.
+export const WOLF_ATTACK_RADIUS = 3.0;
+export const WOLF_HEAT_DAMAGE = 4.0;   // heat per second, per wolf, at the furnace
+
+// --- Guard squad -----------------------------------------------------------
+// One squad, moved between gates by tapping. Combat is fully automatic; the
+// player never aims. Travel time is what makes a wrong rally cost something.
+export const SQUAD_SPEED = 6.0;
+export const SQUAD_RANGE = 4.5;
+export const SQUAD_DPS = 2.2;
+
+// --- Rally taps ------------------------------------------------------------
+// A phone held in one hand wobbles, so a few pixels of drift is still a tap.
+// Anything longer or further is a drag, which leaves room for future gestures
+// without reinterpreting orders the player already gave.
+export const TAP_MAX_SECONDS = 0.4;
+export const TAP_MAX_DRIFT = 18;       // CSS pixels

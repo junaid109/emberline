@@ -1,6 +1,6 @@
 // src/render/actors.js
 /* global THREE */
-import { PAD_RADIUS } from '../core/constants.js';
+import { PAD_RADIUS, SQUAD_RANGE } from '../core/constants.js';
 
 const COLORS = {
   parka: 0x2e86c1,
@@ -134,6 +134,122 @@ export function createFurnace() {
   g.add(padRim);
 
   g.userData.padRadius = PAD_RADIUS;
+
+  return g;
+}
+
+// --- night actors ----------------------------------------------------------
+// All geometry and materials are module-level singletons, shared across every
+// instance. Wolves are created and destroyed every night, so allocating per
+// wolf would churn GPU resources on exactly the frames already doing the most
+// work.
+
+const WOLF_BODY_GEO = new THREE.BoxGeometry(0.7, 0.55, 1.5);
+const WOLF_HEAD_GEO = new THREE.BoxGeometry(0.45, 0.42, 0.5);
+const WOLF_MAT = new THREE.MeshLambertMaterial({ color: 0x4b4f58 });
+const WOLF_EYE_GEO = new THREE.SphereGeometry(0.09, 6, 6);
+const WOLF_EYE_MAT = new THREE.MeshBasicMaterial({ color: 0xffd166 });
+
+export function createWolfMesh() {
+  const g = new THREE.Group();
+
+  const body = new THREE.Mesh(WOLF_BODY_GEO, WOLF_MAT);
+  body.position.y = 0.7;
+  g.add(body);
+
+  const head = new THREE.Mesh(WOLF_HEAD_GEO, WOLF_MAT);
+  head.position.set(0, 0.95, 0.85);
+  g.add(head);
+
+  // Eyes are MeshBasicMaterial, so they stay bright when the night lighting
+  // drops. At night the wolves should be readable as two approaching sparks
+  // well before their silhouette resolves.
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(WOLF_EYE_GEO, WOLF_EYE_MAT);
+    eye.position.set(0.13 * side, 1.0, 1.08);
+    g.add(eye);
+  }
+
+  return g;
+}
+
+const GUARD_BODY_GEO = new THREE.CapsuleGeometry(0.32, 0.9, 4, 8);
+const GUARD_MAT = new THREE.MeshLambertMaterial({ color: 0xc0392b });
+const SQUAD_RING_GEO = new THREE.RingGeometry(SQUAD_RANGE - 0.18, SQUAD_RANGE, 40);
+const SQUAD_RING_MAT = new THREE.MeshBasicMaterial({
+  color: 0xff7b6b, transparent: true, opacity: 0.45, side: THREE.DoubleSide,
+});
+
+/**
+ * The guard squad: three bodies plus a ring showing exactly how far they
+ * reach.
+ *
+ * Drawing the range is not decoration. Combat is automatic, so the ONLY thing
+ * the player controls is where this circle sits — it has to be visible to be
+ * decidable, and it is built from SQUAD_RANGE so it cannot misreport it.
+ */
+export function createSquadMesh() {
+  const g = new THREE.Group();
+
+  const offsets = [[0, 0], [-0.55, 0.4], [0.55, 0.4]];
+  for (const [dx, dz] of offsets) {
+    const guard = new THREE.Mesh(GUARD_BODY_GEO, GUARD_MAT);
+    guard.position.set(dx, 0.75, dz);
+    g.add(guard);
+  }
+
+  const ring = new THREE.Mesh(SQUAD_RING_GEO, SQUAD_RING_MAT);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.06;
+  g.add(ring);
+
+  g.userData.setEngaging = (on) => { SQUAD_RING_MAT.opacity = on ? 0.8 : 0.45; };
+  return g;
+}
+
+const GATE_POST_GEO = new THREE.BoxGeometry(0.5, 3.2, 0.5);
+const GATE_POST_MAT = new THREE.MeshLambertMaterial({ color: 0x6b5a45 });
+const GATE_ARCH_GEO = new THREE.BoxGeometry(3.4, 0.45, 0.5);
+
+/**
+ * A gate: two posts and a lintel, plus a lamp that lights when this lane is
+ * the one the wolves will use.
+ *
+ * The lamp is the dusk telegraph — the single piece of information the rally
+ * decision is made from — so it is emissive-bright and sits above the
+ * silhouette where nothing can occlude it.
+ */
+export function createGateMesh(x, z) {
+  const g = new THREE.Group();
+
+  for (const side of [-1.45, 1.45]) {
+    const post = new THREE.Mesh(GATE_POST_GEO, GATE_POST_MAT);
+    post.position.set(side, 1.6, 0);
+    g.add(post);
+  }
+
+  const arch = new THREE.Mesh(GATE_ARCH_GEO, GATE_POST_MAT);
+  arch.position.y = 3.4;
+  g.add(arch);
+
+  // Per-gate material: each lamp changes colour independently.
+  const lampMat = new THREE.MeshBasicMaterial({ color: 0x3a4654 });
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 10), lampMat);
+  lamp.position.y = 4.3;
+  g.add(lamp);
+
+  const warnLight = new THREE.PointLight(0xff4d3d, 0, 22, 2);
+  warnLight.position.y = 4.3;
+  g.add(warnLight);
+
+  g.position.set(x, 0, z);
+  // Face the furnace, so the gate reads as a way in rather than a loose prop.
+  g.rotation.y = Math.atan2(-x, -z);
+
+  g.userData.setTelegraphed = (on, pulse) => {
+    lampMat.color.setHex(on ? 0xff4d3d : 0x3a4654);
+    warnLight.intensity = on ? 1.2 + pulse * 1.8 : 0;
+  };
 
   return g;
 }

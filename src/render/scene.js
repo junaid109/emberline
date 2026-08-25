@@ -19,10 +19,36 @@ export function createScene(canvas) {
   camera.position.set(0, CAMERA_HEIGHT, CAMERA_DISTANCE);
   camera.lookAt(0, 0, 0);
 
-  scene.add(new THREE.HemisphereLight(0xcfe4f5, 0x4a5a6a, 1.1));
+  const sky = new THREE.HemisphereLight(0xcfe4f5, 0x4a5a6a, 1.1);
+  scene.add(sky);
   const sun = new THREE.DirectionalLight(0xffffff, 1.0);
   sun.position.set(-12, 24, 8);
   scene.add(sun);
+
+  // Day and night colours, blended by setDarkness(). Night never reaches full
+  // black: the competition scores legibility, and a player who cannot see the
+  // wolf that is eating their furnace has been given atmosphere instead of
+  // information.
+  const DAY_FOG = new THREE.Color(0x9fb6c9);
+  const NIGHT_FOG = new THREE.Color(0x121d2e);
+  const DAY_CLEAR = new THREE.Color(0x0d1b2a);
+  const NIGHT_CLEAR = new THREE.Color(0x060b14);
+  const scratch = new THREE.Color();
+
+  /**
+   * @param {number} t 0 = full day, 1 = deepest night.
+   *
+   * Lighting is floored at ~28% rather than zero so silhouettes survive. The
+   * furnace glow and the wolves' eyes then read as the brightest things on
+   * screen, which is exactly where the player's attention belongs.
+   */
+  function setDarkness(t) {
+    const k = Math.max(0, Math.min(1, t));
+    sky.intensity = 1.1 - 0.78 * k;
+    sun.intensity = 1.0 - 0.72 * k;
+    scene.fog.color.copy(scratch.copy(DAY_FOG).lerp(NIGHT_FOG, k));
+    renderer.setClearColor(scratch.copy(DAY_CLEAR).lerp(NIGHT_CLEAR, k));
+  }
 
   function resize() {
     // Read both the drawing-buffer size and the aspect ratio from the same
@@ -100,5 +126,5 @@ export function createScene(canvas) {
     showResumeOverlay();
   });
 
-  return { scene, camera, renderer, resize, render: () => renderer.render(scene, camera) };
+  return { scene, camera, renderer, resize, setDarkness, render: () => renderer.render(scene, camera) };
 }

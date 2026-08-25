@@ -291,3 +291,89 @@ what is tested.
 - **Heat drains a full bar in about 37 seconds**, so the furnace dies before a round trip completes.
   That is expected — the day/night cycle that gives this pressure its shape is the next milestone.
 - Next: Milestone 2 — day/night cycle, dusk telegraph, three gates, wolves, guard squad, rally taps.
+
+---
+
+## Session 004 — 2026-08-25 — Milestone 2: the night
+
+The day loop now has something to be *for*. Seven nights, a dusk telegraph, three
+gates, wolves, and one guard squad moved by tapping.
+
+### Decisions locked
+
+1. **The telegraph is a promise, not a hint.** The gates a night will use are rolled once at
+   dusk and are exactly the gates wolves spawn from. If those could ever diverge, the rally
+   decision would be a coin flip and the dusk window would be decoration. This is enforced by
+   test, and the test was mutation-checked.
+2. **Squad damage is split across every wolf in range, not focused.** Focusing would let one
+   squad hold any gate forever. Splitting means a big enough pack overwhelms them, which is
+   what keeps the player hauling instead of parking the squad and watching.
+3. **Rallying costs travel time.** The squad walks; it does not teleport. That travel is the
+   entire price of a wrong guess, and it is the only price — so it has to be real.
+4. **Night lighting is floored, never black.** Legibility is the one visual property the
+   competition scores. A player who cannot see the wolf eating their furnace has been given
+   atmosphere instead of information.
+5. **Input is split by screen region, not by gesture.** The joystick owns the lower-left; taps
+   own everything else. The two regions are asserted to tile the screen exactly — no overlap,
+   no dead zone — so the controls can never fight over a pointer.
+6. **The randomness source is injected.** `createWorld(roll)` takes the RNG, so the telegraph
+   is reproducible under test and can be asserted against the wolves that actually spawn.
+
+### Prompted
+
+- Asked for the night to be built core-first, with the phase machine, gates, wolves and squad
+  as pure modules that know nothing about rendering.
+- Asked specifically for tests that would fail if playing well and playing badly produced the
+  same outcome — the failure mode that makes a decision cosmetic.
+- Asked for the render layer to get smoke coverage, since the browser was unavailable this
+  session and shipping it unverified was not acceptable.
+
+### Result
+
+168 core tests, then 20 more for the render/input layer. The two that matter most are a
+matched pair: rally to the lit gate and the furnace is never touched; rally to the wrong one
+and it is mauled. Together they prove the night contains an actual decision.
+
+Both were mutation-checked rather than trusted:
+
+- Making wolves spawn at any gate regardless of the telegraph failed *the tell must never lie*
+  and *a correctly rallied squad clears the night*.
+- Making the squad teleport instead of walk failed *rallying costs travel time*.
+
+Two test defects were found and fixed along the way, both mine rather than the code's: a
+diagonal-walk assertion that assumed the player starts at the origin (they start at z=8), and
+a wolf-stop assertion that did not allow the one frame of travel a wolf takes to cross into
+its attack radius.
+
+Adding the night also silently broke three older tests, which was informative: they ran for
+100 simulated seconds, and the furnace now burns out in about 37. They had quietly become
+tests about starvation. They now say out loud that the fire is not their subject.
+
+### Hand edits
+
+- The render layer needed a Three.js stand-in to be testable at all. `tests/helpers/three-stub.mjs`
+  builds scene graphs without a GPU. It proves nothing about pixels — what it proves is that
+  every module constructs and every `userData` hook the frame loop calls actually exists,
+  which is the class of bug that otherwise presents as a black screen and an empty console.
+
+### Verified
+
+- 188 tests passing.
+- `npm run package` emits `emberline.zip` at 0.29MB against the 35MB cap; game code 35.9KB.
+- The full seven-night arc totals between 8 and 13 minutes, asserted.
+- Every night's wolf wave is asserted to fit inside the night it belongs to, so the escalation
+  curve cannot silently flatten on the hardest nights.
+- Joystick and tap regions verified to tile a 393x852 screen with zero overlap and zero dead
+  pixels.
+
+### Open / next
+
+- **NOT verified visually.** The browser preview was unavailable for this whole session, so
+  nothing in Milestone 2 has been seen rendering: gates, wolves, the squad ring, the night
+  lighting ramp, the phase banner, and the end-of-run card are all covered by smoke tests
+  only. This is the first thing to check next session.
+- **Still not verified on physical hardware.**
+- **Tuning is now clearly overdue.** The furnace empties in ~37s against a 60s first day, so a
+  new player loses before they have learned the controls. The systems are right; the numbers
+  are not. That is the day 12-14 pass, but this specific number may need moving sooner.
+- Next: Milestone 3 — four-resource economy, ghost-build plots, walk-in pads, survivors.

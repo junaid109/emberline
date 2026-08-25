@@ -1,0 +1,28 @@
+# Netlify config — play-testing only. This deployment carries no submission
+# weight: the competition judges the .zip alone and never asks for a URL. It
+# exists so the game can be opened on a phone over HTTPS, which is a stricter
+# test than the LAN http:// server (iOS gates some APIs on a secure context).
+#
+# What is published is `dist/` — the EXTRACTED emberline.zip, not the working
+# tree. That is deliberate: the deployed site is then byte-identical to the
+# submitted artefact, so a bug found here is a bug a judge would have hit.
+
+[build]
+  # Rebuilds from source, repackages, and extracts the zip. vendor/ is
+  # gitignored, so `npm run vendor` has to run before the build.
+  command = "npm run vendor && npm run build && npm run package && npm run unpack"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# The game must make zero external network requests at runtime — that is an
+# auto-fail condition for the competition. This CSP turns a violation into a
+# visible console error here, rather than a silent failure discovered at
+# submission time. 'unsafe-inline' is required because the rules mandate that
+# all game code live inline in index.html.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'"
+    Cache-Control = "no-store"

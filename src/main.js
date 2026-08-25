@@ -1,41 +1,114 @@
 // src/main.js
 //
 // Bootstrap and render loop. This file owns no game rules: it builds the
-// scene, hands the joystick direction to tickWorld(), and copies the resulting
-// numbers onto meshes. Everything that decides what happens lives in
-// src/core/world.js, where it can be tested without a browser.
+// scene, hands input to tickWorld(), and copies the resulting numbers onto
+// meshes. Everything that decides what happens lives in src/core/world.js,
+// where it can be tested without a browser.
 /* global THREE */
 import { createScene } from './render/scene.js';
-import { createPlayer, createTree, updateStack, createFurnace } from './render/actors.js';
+import {
+  createPlayer, createTree, updateStack, createFurnace,
+  createWolfMesh, createSquadMesh, createGateMesh,
+} from './render/actors.js';
 import { createGround } from './render/ground.js';
+import { createGroundPicker } from './render/pick.js';
 import { createJoystick } from './input/joystick.js';
+import { createTapper } from './input/tap.js';
 import { ringRadius } from './core/heat.js';
-import { createWorld, tickWorld, clampDt } from './core/world.js';
+import { createWorld, tickWorld, clampDt, rallyToward } from './core/world.js';
+import { phaseRemaining, phaseProgress } from './core/cycle.js';
 import { createHud } from './ui/hud.js';
 import { CAMERA_HEIGHT, CAMERA_DISTANCE, HEAT_MAX } from './core/constants.js';
 
-const view = createScene(document.getElementById('game'));
-const stick = createJoystick(document.getElementById('game'));
+const canvas = document.getElementById('game');
+const view = createScene(canvas);
+const stick = createJoystick(canvas);
 const hud = createHud(document.getElementById('ui'));
 const groundView = createGround(view.scene);
+const pickGround = createGroundPicker(view.camera, canvas);
 
-const world = createWorld();
+let world = createWorld();
 
 const player = createPlayer();
-player.position.set(world.player.x, 0, world.player.z);
 view.scene.add(player);
 
 // Node meshes are keyed by the same index as world.nodes, so an event carrying
 // a node index is all the renderer needs to find the mesh to hide.
-const nodeMeshes = world.nodes.map((node) => {
-  const mesh = createTree(node.x, node.z);
-  view.scene.add(mesh);
-  return mesh;
-});
+let nodeMeshes = [];
+let gateMeshes = [];
+
+// Wolves come and go every night. Meshes are pooled rather than created and
+// destroyed per wolf: allocating GPU resources during a wave would stutter on
+// exactly the frames already doing the most work.
+const wolfPool = [];
 
 const furnace = createFurnace();
-furnace.position.set(world.pad.x, 0, world.pad.z);
 view.scene.add(furnace);
+
+const squadMesh = createSquadMesh();
+view.scene.add(squadMesh);
+
+function buildWorldMeshes() {
+  for (const m of nodeMeshes) view.scene.remove(m);
+  for (const m of gateMeshes) view.scene.remove(m);
+
+  nodeMeshes = world.nodes.map((node) => {
+    const mesh = createTree(node.x, node.z);
+    view.scene.add(mesh);
+    return mesh;
+  });
+
+  gateMeshes = world.gates.map((gate) => {
+    const mesh = createGateMesh(gate.x, gate.z);
+    view.scene.add(mesh);
+    return mesh;
+  });
+
+  player.position.set(world.player.x, 0, world.player.z);
+  furnace.position.set(world.pad.x, 0, world.pad.z);
+  squadMesh.position.set(world.squad.x, 0, world.squad.z);
+  updateStack(player.userData.stackAnchor, world.carry.items);
+}
+buildWorldMeshes();
+
+/** Returns a mesh for wolf slot i, growing the pool only when a night needs it. */
+function wolfMeshAt(i) {
+  while (wolfPool.length <= i) {
+    const mesh = createWolfMesh();
+    mesh.visible = false;
+    view.scene.add(mesh);
+    wolfPool.push(mesh);
+  }
+  return wolfPool[i];
+}
+
+createTapper(canvas, (x, y) => {
+  if (world.over) return;
+  const point = pickGround(x, y);
+  if (point) rallyToward(world, point.x, point.z);
+});
+
+hud.onRestart(() => {
+  world = createWorld();
+  buildWorldMeshes();
+});
+
+/**
+ * How dark it is right now, 0 to 1.
+ *
+ * Dusk and dawn ramp rather than cut, so the player sees the light going and
+ * has time to act on it. A hard switch would make the telegraph feel like a
+ * penalty rather than a warning.
+ */
+function darkness(cycle) {
+  const t = phaseProgress(cycle);
+  switch (cycle.phase) {
+    case 'dusk': return t;
+    case 'night': return 1;
+    case 'dawn': return 1 - t;
+    default: return 0;
+  }
+}
 
 let last = performance.now();
 function frame(now) {
@@ -54,9 +127,29 @@ function frame(now) {
   if (ev.depletedNode !== -1) nodeMeshes[ev.depletedNode].visible = false;
   if (ev.stackChanged) updateStack(player.userData.stackAnchor, world.carry.items);
 
+  // A telegraphed gate pulses. Motion is what actually catches a player's eye
+  // on a small screen — a static colour change reads as scenery.
+  const pulse = 0.5 + 0.5 * Math.sin(now * 0.006);
+  for (let i = 0; i < gateMeshes.length; i++) {
+    gateMeshes[i].userData.setTelegraphed(world.gates[i].telegraphed, pulse);
+  }
+
+  for (let i = 0; i < wolfPool.length; i++) {
+    const wolf = world.wolves[i];
+    const mesh = wolfPool[i];
+    mesh.visible = Boolean(wolf);
+    if (!wolf) continue;
+    mesh.position.set(wolf.x, 0, wolf.z);
+    mesh.rotation.y = Math.atan2(world.pad.x - wolf.x, world.pad.z - wolf.z);
+  }
+
+  squadMesh.position.set(world.squad.x, 0, world.squad.z);
+  squadMesh.userData.setEngaging(world.squad.engaging);
+
   groundView.setRingRadius(ringRadius(world.heat));
   furnace.userData.setFlame(world.heat / HEAT_MAX);
-  hud.update(world.store, world.heat);
+  view.setDarkness(darkness(world.cycle));
+  hud.update(world, phaseRemaining(world.cycle));
 
   view.render();
   requestAnimationFrame(frame);

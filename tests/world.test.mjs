@@ -16,6 +16,18 @@ function run(world, n, dt = STEP, dx = 0, dz = 0) {
   for (let i = 0; i < n; i++) tickWorld(world, dt, dx, dz);
 }
 
+/**
+ * Same, but keeps the furnace fed.
+ *
+ * The furnace now burns out in well under a minute, and tickWorld stops the
+ * world once it does. A test about movement or harvesting that runs longer than
+ * that would silently become a test about starvation instead, so these ones say
+ * out loud that the fire is not the subject.
+ */
+function runFed(world, n, dt = STEP, dx = 0, dz = 0) {
+  for (let i = 0; i < n; i++) { world.heat = HEAT_MAX; tickWorld(world, dt, dx, dz); }
+}
+
 /** Teleports the player next to a node without simulating the walk there. */
 function standAt(world, x, z) {
   world.player.x = x;
@@ -81,7 +93,7 @@ test('zero input leaves position and facing untouched', () => {
 
 test('the player is clamped inside the world edge no matter how long they walk', () => {
   const w = createWorld();
-  run(w, 2000, STEP, 1, 0);
+  runFed(w, 2000, STEP, 1, 0);
   const limit = WORLD_RADIUS - WORLD_EDGE_MARGIN;
   assert.ok(Math.hypot(w.player.x, w.player.z) <= limit + 1e-9);
   assert.ok(w.player.x > limit - 1e-6, 'should be pressed right up against the edge');
@@ -89,8 +101,13 @@ test('the player is clamped inside the world edge no matter how long they walk',
 
 test('clamping preserves direction rather than snapping to an axis', () => {
   const w = createWorld();
+  w.player.x = 0;
+  w.player.z = 0;                       // start centred so the walk is a true diagonal
   run(w, 2000, STEP, 1, 1);
-  assert.ok(Math.abs(w.player.x - w.player.z) < 1e-6, 'diagonal walk should stop on the diagonal');
+  const limit = WORLD_RADIUS - WORLD_EDGE_MARGIN;
+  assert.ok(Math.abs(Math.hypot(w.player.x, w.player.z) - limit) < 1e-6, 'should rest on the limit circle');
+  assert.ok(w.player.x > 0 && w.player.z > 0, 'neither axis may be zeroed by the clamp');
+  assert.ok(Math.abs(w.player.x - w.player.z) < 1e-3, 'diagonal walk should stop on the diagonal');
 });
 
 test('facing follows the input direction', () => {
@@ -174,7 +191,7 @@ test('harvesting stops at CARRY_CAP', () => {
   const w = createWorld();
   w.nodes[0].remaining = 100;                  // an inexhaustible node, so the cap is what stops us
   standAt(w, w.nodes[0].x, w.nodes[0].z);
-  run(w, 2000);
+  runFed(w, 2000);
   assert.ok(carryIsFull(w.carry));
   assert.equal(carryTotal(w.carry), CARRY_CAP);
 });
@@ -225,7 +242,7 @@ test('deposit drains at most one item per tick', () => {
   const w = createWorld();
   w.nodes[0].remaining = 100;
   standAt(w, w.nodes[0].x, w.nodes[0].z);
-  run(w, 2000);                                          // fill to CARRY_CAP
+  runFed(w, 2000);                                       // fill to CARRY_CAP
   assert.equal(carryTotal(w.carry), CARRY_CAP);
 
   standAt(w, w.pad.x, w.pad.z);
@@ -239,15 +256,15 @@ test('stepping off the pad mid-drain stops the deposit', () => {
   const w = createWorld();
   w.nodes[0].remaining = 100;
   standAt(w, w.nodes[0].x, w.nodes[0].z);
-  run(w, 2000);
+  runFed(w, 2000);
 
   standAt(w, w.pad.x, w.pad.z);
-  run(w, 3);
+  runFed(w, 3);
   const partway = carryTotal(w.carry);
   assert.ok(partway < CARRY_CAP, 'expected some items to have drained');
 
   standAt(w, 0, 20);                                     // off the pad, away from every node
-  run(w, 60);
+  runFed(w, 60);
   assert.equal(carryTotal(w.carry), partway, 'carry must freeze once off the pad');
 });
 
