@@ -59,6 +59,45 @@ test('setDarkness dims the lights and never inverts them', () => {
   }
 });
 
+test('night is dimmed by a measured amount, not just "less than day"', () => {
+  // "Darker than day" is satisfied by a 1% dip, and the test above would have
+  // passed one. A capture of the real renderer put night ground at 0.53x the
+  // luminance of day ground, which comes from total scene light dropping to
+  // roughly 29% — sRGB response turns a 0.29 light ratio into a ~0.5 pixel
+  // ratio, which is why the light budget rather than the pixel is pinned here.
+  //
+  // The band matters in both directions. Too little and the night the whole
+  // loop is built around does not arrive; too much and the wolf eating the
+  // furnace becomes atmosphere instead of information.
+  const view = createScene(makeCanvasStub());
+  const total = () => view.scene.children
+    .filter((c) => typeof c.intensity === 'number')
+    .reduce((sum, l) => sum + l.intensity, 0);
+
+  view.setDarkness(0);
+  const day = total();
+  view.setDarkness(1);
+  const night = total();
+
+  const ratio = night / day;
+  assert.ok(ratio > 0.2, `night keeps only ${(ratio * 100).toFixed(0)}% of the light; silhouettes will not survive it`);
+  assert.ok(ratio < 0.4, `night keeps ${(ratio * 100).toFixed(0)}% of the light, so it never really falls`);
+});
+
+test('dusk and dawn ramp, so the light is seen going rather than cut', () => {
+  // The dusk window IS the rally decision. If the light cut instead of faded,
+  // the telegraph would read as a penalty landing rather than a warning given.
+  const view = createScene(makeCanvasStub());
+  const total = () => view.scene.children
+    .filter((c) => typeof c.intensity === 'number')
+    .reduce((sum, l) => sum + l.intensity, 0);
+
+  const steps = [0, 0.25, 0.5, 0.75, 1].map((t) => { view.setDarkness(t); return total(); });
+  for (let i = 1; i < steps.length; i++) {
+    assert.ok(steps[i] < steps[i - 1], 'the fade must be monotonic, with no step back toward daylight');
+  }
+});
+
 test('setDarkness clamps out-of-range input rather than producing negative light', () => {
   const view = createScene(makeCanvasStub());
   view.setDarkness(-5);
