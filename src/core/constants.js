@@ -51,6 +51,20 @@ export const RIM_BAND = 0.5;           // constant world-space width of the rim 
 export const HEAT_PER_WOOD = 6;        // heat units restored per wood log deposited into the furnace
 
 export const PLAYER_SPEED = 7.5;       // world units per second
+
+// Speed on ground the furnace has NOT thawed, as a fraction of PLAYER_SPEED.
+//
+// This is what makes "the furnace is the map" a mechanic rather than a picture.
+// ringRadius() was for a long time consumed by exactly one line of the
+// renderer, to set a texture parameter: the thawed circle was drawn, and the
+// simulation ignored it completely. The player walked the frozen waste at full
+// speed and the fire's only real job was not hitting zero.
+//
+// Now the ring is the ground you can move on. Deep snow outside it is crossable
+// — deliberately, because a hard wall would trap a player whose fire burned
+// low, with the nodes they need to refuel it stranded on the far side. Slow is
+// a cost you can choose to pay; a wall is a death spiral with no counterplay.
+export const FROZEN_SPEED_MULT = 0.45;
 export const CARRY_CAP = 8;
 
 export const HARVEST_SECONDS = 0.7;    // per item pulled from a node

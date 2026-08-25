@@ -2,11 +2,16 @@
 /* global THREE */
 import { PAD_RADIUS, SQUAD_RANGE } from '../core/constants.js';
 
+import {
+  PLAYER_PARKA, PLAYER_SKIN, PLAYER_BOOTS, PLAYER_HOOD, PLAYER_SHADOW,
+  GUARD, WOLF, WOLF_EYE,
+} from './palette.js';
+
 const COLORS = {
-  parka: 0x2e86c1,
-  skin: 0xe8c39e,
-  boots: 0x3d2b1f,
-  hood: 0xf4f6f7,
+  parka: PLAYER_PARKA,
+  skin: PLAYER_SKIN,
+  boots: PLAYER_BOOTS,
+  hood: PLAYER_HOOD,
 };
 
 function box(w, h, d, color) {
@@ -35,6 +40,20 @@ export function createPlayer() {
   const hood = box(0.75, 0.25, 0.7, COLORS.hood);
   hood.position.y = 2.3;
   g.add(hood);
+
+  // A dark contact shadow. The frozen waste is now somewhere the player has a
+  // reason to walk, and no single parka colour reads equally well on snow and
+  // on worked earth — so the figure also carries an anchor that reads on both,
+  // and says exactly which point of ground the game thinks they stand on.
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.62, 16),
+    new THREE.MeshBasicMaterial({
+      color: PLAYER_SHADOW, transparent: true, opacity: 0.34, depthWrite: false,
+    })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.02;              // just clear of the ground, to avoid z-fighting
+  g.add(shadow);
 
   g.userData.stackAnchor = new THREE.Group();
   g.userData.stackAnchor.position.set(0, 1.7, -0.45);   // on the back
@@ -146,9 +165,9 @@ export function createFurnace() {
 
 const WOLF_BODY_GEO = new THREE.BoxGeometry(0.7, 0.55, 1.5);
 const WOLF_HEAD_GEO = new THREE.BoxGeometry(0.45, 0.42, 0.5);
-const WOLF_MAT = new THREE.MeshLambertMaterial({ color: 0x4b4f58 });
+const WOLF_MAT = new THREE.MeshLambertMaterial({ color: WOLF });
 const WOLF_EYE_GEO = new THREE.SphereGeometry(0.09, 6, 6);
-const WOLF_EYE_MAT = new THREE.MeshBasicMaterial({ color: 0xffd166 });
+const WOLF_EYE_MAT = new THREE.MeshBasicMaterial({ color: WOLF_EYE });
 
 export function createWolfMesh() {
   const g = new THREE.Group();
@@ -174,7 +193,7 @@ export function createWolfMesh() {
 }
 
 const GUARD_BODY_GEO = new THREE.CapsuleGeometry(0.32, 0.9, 4, 8);
-const GUARD_MAT = new THREE.MeshLambertMaterial({ color: 0xc0392b });
+const GUARD_MAT = new THREE.MeshLambertMaterial({ color: GUARD });
 const SQUAD_RING_GEO = new THREE.RingGeometry(SQUAD_RANGE - 0.18, SQUAD_RANGE, 40);
 const SQUAD_RING_MAT = new THREE.MeshBasicMaterial({
   color: 0xff7b6b, transparent: true, opacity: 0.45, side: THREE.DoubleSide,

@@ -13,9 +13,10 @@ import {
   HEAT_START, HEAT_DRAIN_DAY, HEAT_PER_WOOD, CARRY_CAP, HARVEST_RANGE,
   NODE_COUNT, NODE_RING_BASE, NODE_RING_STEP, NODE_AMOUNT, PAD_RADIUS,
   MAX_FRAME_DT, HEAT_DRAIN_NIGHT_MULT, WOLVES_FIRST_NIGHT, WOLVES_PER_NIGHT,
+  FROZEN_SPEED_MULT,
   WOLF_SPAWN_INTERVAL, GATE_RING_RADIUS, WOLF_SPAWN_SPREAD,
 } from './constants.js';
-import { drainHeat, addFuel } from './heat.js';
+import { drainHeat, addFuel, ringRadius } from './heat.js';
 import { createNode, tickHarvest, tickRegrow } from './nodes.js';
 import { createCarry, carryAdd, carryTotal, carryIsFull } from './carry.js';
 import { createStore } from './store.js';
@@ -65,7 +66,7 @@ export function createWorld(roll = Math.random) {
     // before the next tickWorld call; nobody retains it across frames.
     events: {
       harvestedKind: null, depletedNode: -1, revivedNodes: [], deposited: null,
-      stackChanged: false, onPad: false,
+      stackChanged: false, onPad: false, onFrozen: false,
       phaseEntered: null, wolvesSpawned: 0, wolvesKilled: 0, mauled: false,
     },
   };
@@ -85,11 +86,22 @@ export function clampDt(rawSeconds) {
   return Math.min(rawSeconds, MAX_FRAME_DT);
 }
 
-function movePlayer(player, dirX, dirZ, dt) {
-  if (dirX === 0 && dirZ === 0) return;
+/**
+ * Moves the player, at a speed set by the ground underfoot.
+ *
+ * Thawed ground is fast; the frozen waste beyond the ring is deep snow. This is
+ * the one place the heat number touches movement, and it is what makes stoking
+ * the fire a way of reaching further rather than only a way of not dying.
+ *
+ * @returns {boolean} whether the player is standing on frozen ground
+ */
+function movePlayer(player, dirX, dirZ, dt, thawedRadius) {
+  const frozen = Math.hypot(player.x, player.z) > thawedRadius;
+  if (dirX === 0 && dirZ === 0) return frozen;
 
-  player.x += dirX * PLAYER_SPEED * dt;
-  player.z += dirZ * PLAYER_SPEED * dt;
+  const speed = PLAYER_SPEED * (frozen ? FROZEN_SPEED_MULT : 1);
+  player.x += dirX * speed * dt;
+  player.z += dirZ * speed * dt;
 
   const limit = WORLD_RADIUS - WORLD_EDGE_MARGIN;
   const dist = Math.hypot(player.x, player.z);
@@ -100,6 +112,7 @@ function movePlayer(player, dirX, dirZ, dt) {
   }
 
   player.angle = Math.atan2(dirX, dirZ);
+  return frozen;
 }
 
 /**
@@ -182,7 +195,8 @@ function tickNightCycle(world, dt, ev) {
  *
  * System order is deliberate and must not be shuffled:
  *   1. cycle      — sets the phase everything below is conditioned on
- *   2. move       — everything downstream reads the player's final position
+ *   2. move       — at a speed set by the heat ring; everything downstream
+ *                  reads the player's final position
  *   3. drain heat — so that (5) can only ever add to a post-drain value
  *   4. regrow     — the forest comes back, then (4b) harvest takes from it
  *   5. deposit    — empties the carry into the store, converting wood to heat
@@ -212,7 +226,9 @@ export function tickWorld(world, dt, dirX, dirZ) {
 
   tickNightCycle(world, dt, ev);
 
-  movePlayer(world.player, dirX, dirZ, dt);
+  // Read the ring BEFORE this frame's drain, so the ground the player felt
+  // underfoot is the same ground that was drawn for them last frame.
+  ev.onFrozen = movePlayer(world.player, dirX, dirZ, dt, ringRadius(world.heat));
 
   // Night costs multiples of what day costs. Surviving the dark is what the
   // day's hauling was FOR, and this multiplier is the whole reason it matters.

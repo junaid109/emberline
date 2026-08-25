@@ -1,11 +1,12 @@
 // src/render/ground.js
 /* global THREE */
 import { GROUND_VISUAL_RADIUS, RING_MIN, RING_MAX, RIM_BAND } from '../core/constants.js';
+import { SNOW, THAWED, RING_RIM } from './palette.js';
 
 export function createGround(scene) {
   const snow = new THREE.Mesh(
     new THREE.CircleGeometry(GROUND_VISUAL_RADIUS, 64),
-    new THREE.MeshLambertMaterial({ color: 0xdce8f2 })
+    new THREE.MeshLambertMaterial({ color: SNOW })
   );
   snow.rotation.x = -Math.PI / 2;
   scene.add(snow);
@@ -16,7 +17,7 @@ export function createGround(scene) {
   // world-space band regardless of ring radius — no RingGeometry, no per-frame allocation.
   const rim = new THREE.Mesh(
     new THREE.CircleGeometry(1, 64),
-    new THREE.MeshBasicMaterial({ color: 0xffb45c })
+    new THREE.MeshBasicMaterial({ color: RING_RIM })
   );
   rim.rotation.x = -Math.PI / 2;
   rim.position.y = 0.01;
@@ -24,7 +25,7 @@ export function createGround(scene) {
 
   const thawed = new THREE.Mesh(
     new THREE.CircleGeometry(1, 64),
-    new THREE.MeshLambertMaterial({ color: 0xa8814f })
+    new THREE.MeshLambertMaterial({ color: THAWED })
   );
   thawed.rotation.x = -Math.PI / 2;
   thawed.position.y = 0.02;

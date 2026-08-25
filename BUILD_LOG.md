@@ -543,3 +543,93 @@ so regrowth, not a stockpile, is what feeds the fire.
 - Night 1 reads only slightly darker than day in capture. Legible, which is what is scored,
   but the darkness ramp is subtler than intended.
 - Next: Milestone 3 — four-resource economy, ghost-build plots, walk-in pads, survivors.
+
+## Session 007 — the furnace was not actually the map
+
+### What happened
+
+`ringRadius()` in `src/core/heat.js` carries the comment *"the whole game is this
+function"*. It was called from exactly one place: `main.js:153`, setting a texture
+parameter on the ground.
+
+The thawed circle was **drawn and then ignored**. The player crossed the frozen waste at
+full speed, harvested wherever they liked, and the fire's only job was not hitting zero.
+The signature idea the entire entry rests on — *the furnace IS the map, heat is the literal
+radius of thawed ground* — was a picture of itself. Same failure mode as the unwinnable
+economy, in a different organ: something load-bearing that nothing was actually leaning on.
+
+### Making it real
+
+`movePlayer` now takes the ring radius, and ground outside it is deep snow crossed at
+`FROZEN_SPEED_MULT` (0.45) of normal speed.
+
+Slowed rather than blocked, deliberately. A hard boundary would strand a player whose fire
+had burned low *outside* it, with the very nodes needed to refuel it on the far side — a
+death spiral with no counterplay. Slow is a cost you can choose to pay; a wall is a trap.
+`tests/thaw.test.mjs` pins that: a player held at 0.5 heat at the world edge must still be
+able to walk home.
+
+Two relationships turned out to already be in the numbers, and are now asserted so they
+cannot be tuned away by accident:
+
+- `RING_MAX` (22) is exactly `NODE_RING_BASE + 2 * NODE_RING_STEP` — a **full furnace thaws
+  precisely as far as the outermost trees**. "The fire is full" and "the whole forest is in
+  reach" are the same sentence.
+- `ringRadius(HEAT_START)` is ~18.5, so the run **opens** with the outer trees on frozen
+  ground. A new player walks at them, hits deep snow, and learns the rule in one gesture,
+  before any wolf exists to complicate it. That is the tutorial, and nobody had to write it.
+
+A probe of a full winning run: 7% of ticks are spent on frozen ground. Right, I think — it
+is a constraint you route around rather than fight.
+
+### The self-referential test trap
+
+First mutation run: setting `FROZEN_SPEED_MULT = 1.0` (mechanic off) failed only ONE test,
+and only the constant-range guard. The behavioural test computed its expectation *from the
+constant*, so expected and actual moved together and it happily passed a disabled mechanic.
+
+Added a test that measures both grounds and compares them to each other, deriving nothing
+from the constant. Now `= 1.0` fails two tests, and deleting the wiring inside `movePlayer`
+fails two others — which is the mutation that matters, since losing the wiring is exactly
+how `ringRadius` went missing in the first place.
+
+### The player was invisible on the ground the mechanic sends them to
+
+A zoomed capture settled it: parka `0x2e86c1` (mid blue) under hood `0xf4f6f7` (near white),
+standing on `0xdce8f2` snow. On paper three different colours; in practice a shape you had
+to hunt for — and now the frozen waste is somewhere the player has an active reason to be.
+
+Extracted `src/render/palette.js` (no THREE dependency) so contrast is a **rule with a test**
+rather than a matter of taste. `tests/palette.test.mjs` asserts the player reads against
+*both* grounds, the rim is distinct from both sides it divides, and the player cannot be
+confused with a guard or — the one that would actually cost a run, read at night in a hurry
+— with a wolf.
+
+The obvious fix was an ember parka, on the reasoning that the fire-keeper should carry the
+fire's colour. **The test rejected it**: warm orange sits 102 RGB units from tan worked
+earth, trading disappearing on snow for disappearing on the other half of the map. A search
+of the colour space against everything else on the field returned bright ice-cyan, 213 units
+clear of its nearest neighbour.
+
+It is the better idea as well as the better number: warm belongs to the furnace, cold
+belongs to you, and the game is the running between them. The one unmistakably orange thing
+on screen stays the thing you are protecting. Plus a dark contact shadow, because no single
+colour can be trusted on ground that changes underfoot.
+
+### Verified
+
+- 252 tests passing.
+- Mutation-tested both the constant and the wiring; both now fail the right tests.
+- Driven live at 393x852 through **real PointerEvents on the canvas**, which exercises the
+  touch-stick path end to end rather than calling the simulation directly.
+- Captured before and after at 4x zoom on the player.
+
+### Open / next
+
+- **Still not verified on physical hardware.** Unchanged, and still the biggest risk.
+- **The player is about 6 x 10 CSS px** at the reference layout (393px / 62 world units =
+  6.34 px per unit, foreshortened by the 52-degree camera). Colour and shadow have made that
+  10px legible, but whether it is *comfortable* under a thumb is precisely the question a
+  device answers and a desktop capture cannot. Deliberately not scaled up on a guess.
+- Night 1 still reads only slightly darker than day.
+- Next: Milestone 3 — four-resource economy, ghost-build plots, walk-in pads, survivors.
