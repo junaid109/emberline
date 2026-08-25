@@ -133,6 +133,9 @@ function frame(now) {
   view.camera.lookAt(world.player.x, 0, world.player.z);
 
   if (ev.depletedNode !== -1) nodeMeshes[ev.depletedNode].visible = false;
+  // A regrown node has to come BACK, or the player is told the forest is gone
+  // while the simulation quietly keeps handing them wood from an invisible tree.
+  for (const i of ev.revivedNodes) nodeMeshes[i].visible = true;
   if (ev.stackChanged) updateStack(player.userData.stackAnchor, world.carry.items);
 
   // A telegraphed gate pulses. Motion is what actually catches a player's eye

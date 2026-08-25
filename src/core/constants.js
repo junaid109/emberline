@@ -34,8 +34,17 @@ export const WORLD_RADIUS = 34;        // playfield half-extent in world units
 export const CAMERA_TARGET_WIDTH = 62;
 
 export const HEAT_MAX = 100;
-export const HEAT_START = 60;
-export const HEAT_DRAIN_DAY = 1.6;     // heat units per second
+
+// The furnace starts nearly full and burns slowly by day. Both numbers are set
+// by one rule: a player who touches nothing at all must live to SEE their first
+// night. At the old 60/1.6 the fire went out after 37s of a 60s first day, so a
+// new player lost before they had finished learning the stick — and the loss
+// taught them nothing, because they had not yet been shown what the fire is for.
+// At 78/1.1 the same player watches the ring close in for the whole day, reaches
+// dusk on fumes, and dies IN the dark with wolves on screen. Same loss, but now
+// it explains itself. Pinned by tests/economy.test.mjs.
+export const HEAT_START = 78;
+export const HEAT_DRAIN_DAY = 1.1;     // heat units per second
 export const RING_MIN = 6;             // ring radius at zero heat
 export const RING_MAX = 22;            // ring radius at full heat
 export const RIM_BAND = 0.5;           // constant world-space width of the rim marking the ring boundary
@@ -52,6 +61,20 @@ export const NODE_COUNT = 10;          // number of harvestable nodes spawned at
 export const NODE_RING_BASE = 14;      // inner radius of the spawn ring band, in world units
 export const NODE_RING_STEP = 4;       // radius step between the 3 interleaved spawn bands
 export const NODE_AMOUNT = 6;          // items held by each spawned node
+
+// Seconds for a harvested node to grow back one log, up to NODE_AMOUNT.
+//
+// This is the single most load-bearing number in the game, and for a long time
+// it did not exist: nothing regrew, so the world held exactly 60 wood against a
+// seven-night run costing 278, and EMBERLINE could not be won by any player at
+// any skill level. Every test that reached night 7 had pinned heat to HEAT_MAX,
+// so the fuel economy was never once exercised.
+//
+// 18s is chosen so that the whole forest regrows at very slightly LESS than the
+// rate one player can carry it: the world can just barely keep up with perfect
+// routing, and not at all with a player who camps a single clearing. That gap
+// is where the skill lives. Pinned by tests/economy.test.mjs.
+export const NODE_REGROW_SECONDS = 18;
 
 export const WORLD_EDGE_MARGIN = 1;    // keeps the player this far inside WORLD_RADIUS
 

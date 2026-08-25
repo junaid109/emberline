@@ -16,7 +16,7 @@ import {
   WOLF_SPAWN_INTERVAL, GATE_RING_RADIUS, WOLF_SPAWN_SPREAD,
 } from './constants.js';
 import { drainHeat, addFuel } from './heat.js';
-import { createNode, tickHarvest } from './nodes.js';
+import { createNode, tickHarvest, tickRegrow } from './nodes.js';
 import { createCarry, carryAdd, carryTotal, carryIsFull } from './carry.js';
 import { createStore } from './store.js';
 import { isOnPad, createDeposit, tickDeposit } from './deposit.js';
@@ -64,7 +64,7 @@ export function createWorld(roll = Math.random) {
     // Reused every frame rather than reallocated. Consumers must read it
     // before the next tickWorld call; nobody retains it across frames.
     events: {
-      harvestedKind: null, depletedNode: -1, deposited: null,
+      harvestedKind: null, depletedNode: -1, revivedNodes: [], deposited: null,
       stackChanged: false, onPad: false,
       phaseEntered: null, wolvesSpawned: 0, wolvesKilled: 0, mauled: false,
     },
@@ -184,7 +184,7 @@ function tickNightCycle(world, dt, ev) {
  *   1. cycle      — sets the phase everything below is conditioned on
  *   2. move       — everything downstream reads the player's final position
  *   3. drain heat — so that (5) can only ever add to a post-drain value
- *   4. harvest    — fills the carry
+ *   4. regrow     — the forest comes back, then (4b) harvest takes from it
  *   5. deposit    — empties the carry into the store, converting wood to heat
  *   6. threat     — squad kills wolves, surviving wolves chew the furnace
  *
@@ -197,6 +197,7 @@ export function tickWorld(world, dt, dirX, dirZ) {
   const ev = world.events;
   ev.harvestedKind = null;
   ev.depletedNode = -1;
+  ev.revivedNodes.length = 0;
   ev.deposited = null;
   ev.stackChanged = false;
 
@@ -217,6 +218,13 @@ export function tickWorld(world, dt, dirX, dirZ) {
   // day's hauling was FOR, and this multiplier is the whole reason it matters.
   const nightly = world.cycle.phase === 'night' ? HEAT_DRAIN_NIGHT_MULT : 1;
   world.heat = drainHeat(world.heat, dt, HEAT_DRAIN_DAY * nightly);
+
+  // Regrowth runs for every node, every frame, including ones the player is
+  // standing in. A node the player is actively stripping is regrowing at the
+  // same time; harvesting simply outruns it by a wide margin.
+  for (let i = 0; i < world.nodes.length; i++) {
+    if (tickRegrow(world.nodes[i], dt)) ev.revivedNodes.push(i);
+  }
 
   if (!carryIsFull(world.carry)) {
     for (let i = 0; i < world.nodes.length; i++) {

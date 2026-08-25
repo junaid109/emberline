@@ -7,6 +7,7 @@ import {
   PLAYER_SPEED, WORLD_RADIUS, WORLD_EDGE_MARGIN, HEAT_START, HEAT_DRAIN_DAY,
   HEAT_PER_WOOD, HEAT_MAX, CARRY_CAP, HARVEST_SECONDS, HARVEST_RANGE,
   NODE_COUNT, NODE_AMOUNT, MAX_FRAME_DT, DEPOSIT_INTERVAL,
+  NODE_REGROW_SECONDS,
 } from '../src/core/constants.js';
 
 const STEP = MAX_FRAME_DT;
@@ -167,8 +168,13 @@ test('a node depletes after NODE_AMOUNT items and reports its index once', () =>
   const node = w.nodes[0];
   standAt(w, node.x, node.z);
 
+  // Stop short of NODE_REGROW_SECONDS. Past it the forest hands the node
+  // another log and the player takes that too, which is a SECOND depletion and
+  // a legitimately second event — see the test below.
+  const ticks = Math.floor((NODE_REGROW_SECONDS - 1) / STEP);
+
   let depletedEvents = 0;
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < ticks; i++) {
     const ev = tickWorld(w, STEP, 0, 0);
     if (ev.depletedNode !== -1) {
       assert.equal(ev.depletedNode, 0);
@@ -179,6 +185,29 @@ test('a node depletes after NODE_AMOUNT items and reports its index once', () =>
   assert.equal(node.remaining <= 0, true);
   assert.equal(depletedEvents, 1, 'depletion should be announced exactly once');
   assert.equal(carryTotal(w.carry), Math.min(NODE_AMOUNT, CARRY_CAP));
+});
+
+test('a node that regrows and is stripped again announces BOTH times', () => {
+  // The renderer hides a tree on depletedNode and shows it again on
+  // revivedNodes. If either event fired only once per run, a regrown tree would
+  // be permanently invisible or a stripped one permanently visible, and the
+  // silhouette would stop meaning anything.
+  const w = createWorld();
+  const node = w.nodes[0];
+  standAt(w, node.x, node.z);
+
+  let depleted = 0;
+  let revived = 0;
+  for (let i = 0; i < Math.floor((NODE_REGROW_SECONDS * 2 + 4) / STEP); i++) {
+    w.carry.items.length = 0;                 // an infinitely deep pocket: test the node, not the carry
+    const ev = tickWorld(w, STEP, 0, 0);
+    if (ev.depletedNode === 0) depleted++;
+    if (ev.revivedNodes.includes(0)) revived++;
+  }
+  assert.ok(depleted >= 2, `the node was only reported depleted ${depleted} time(s)`);
+  assert.ok(revived >= 1, 'a regrown node was never reported back to the renderer');
+  assert.ok(Math.abs(depleted - revived) <= 1,
+    `depletions (${depleted}) and revivals (${revived}) must stay paired`);
 });
 
 test('one node holds less than a full carry, so hauling needs more than one tree', () => {

@@ -464,3 +464,82 @@ repeated asset.
 - Tall trees in the near field can pass between the camera and the player when the player is
   at the southern edge. Not yet observed as a real problem; worth watching on a phone.
 - Next: Milestone 3 — four-resource economy, ghost-build plots, walk-in pads, survivors.
+
+## Session 006 — the game could not be won
+
+### What happened
+
+Chasing the overdue tuning note from Session 005, I stopped guessing at the burn rate and
+instead asked the arithmetic a direct question: how much heat does a full seven-night run
+cost, and how much fuel exists to pay for it?
+
+    run length     686 s
+    heat demand    1728
+    fuel in world   360   (60 wood)
+    wood needed     278   (the world contains 60)
+
+**EMBERLINE was unwinnable.** Not badly tuned — impossible. Nodes never regrew, so the map
+held a fixed 60 logs against a run costing 278. No skill, no route, no perfect play finished
+seven nights.
+
+223 tests passed over this. The reason is uncomfortable and worth writing down: *every* test
+that reached night 7 got there by setting `world.heat = HEAT_MAX` on each tick, because each
+was written to isolate some other subject — the phase clock, the telegraph, the squad. Every
+one of those isolations was individually correct. Collectively they meant the fuel economy,
+which is the entire game, had never once been executed.
+
+### The fix, in two halves
+
+**Supply.** `tickRegrow` in `src/core/nodes.js`: a node regrows one log every
+`NODE_REGROW_SECONDS`, capped at `NODE_AMOUNT`. A continuous trickle rather than a respawn
+event, so a clearing you stripped and one you took two logs from are genuinely different
+places and "which clearing is worth walking back to" has a real answer.
+
+18s is not a feel number. The whole forest regrows at 0.56 logs/s; one player hauling
+flat-out moves 0.57. The world sits *just* under the player, so routing across clearings is
+what closes the gap and camping a single one cannot. Both rates are computed from the real
+constants and asserted, so the relationship survives future tuning.
+
+**Learnability.** `HEAT_START` 60 → 78 and `HEAT_DRAIN_DAY` 1.6 → 1.1, set by one rule: a
+player who touches nothing must live to *see* their first night. The old numbers put the fire
+out 37s into a 60s first day — the player lost before finishing the tutorial they were giving
+themselves, and the loss taught them nothing, because the wolves it was warning them about
+had not appeared yet. Now that same idle player watches the ring close for a full day, reaches
+dusk at 10%, and dies in the dark with a gate lit and wolves on screen. Same loss, but it
+explains itself.
+
+### tests/economy.test.mjs
+
+The absent test, now present. It drives a **deliberately mediocre bot** — nearest-node greed,
+no route planning, no anticipation of night — and asserts it survives seven nights on fuel
+alone, with no pinned heat anywhere. If a clumsy bot wins, a human can; if a clumsy bot dies,
+the tuning is too tight rather than the player being bad.
+
+It is bracketed on both sides, because "winnable" and "trivial" fail identically from inside:
+an idle player must still lose, the fire must drop below 75% at some point during a winning
+run, and the wood standing in the ground at any instant must be less than half a run's cost —
+so regrowth, not a stockpile, is what feeds the fire.
+
+### Verified
+
+- 233 tests passing (223 + 9 economy + 1 new node-lifecycle test).
+- **Mutation-tested both fixes.** Reverting regrowth alone fails 3 tests including winnability;
+  reverting the burn rate alone *also* fails winnability. Both were required — neither fix
+  would have been sufficient, which is exactly what a single guessed constant would have missed.
+- One existing test legitimately broke: a node now depletes *twice* inside a 20s window,
+  because it regrows in between. Split into two tests — the second asserts depletion and
+  revival stay paired, since the renderer hides a tree on one event and shows it on the other.
+- Captured live at 393x852 with **no patched constants**, which was itself the point: 62s of
+  idle play reaches dusk at 10% heat with the telegraph lit, and death lands 12s into night 1.
+- End-of-run overlay measured through computed styles: full-viewport 86%-opaque backdrop,
+  30px headline, 160x48 restart button — clear of the 44px touch minimum.
+
+### Open / next
+
+- **Still not verified on physical hardware.** Playability is 25% of the score and remains
+  entirely untested by thumb.
+- The canvas capture harness photographs the canvas only; the HUD is DOM and never appears in
+  those shots. Worth remembering before reading a capture as "the HUD is missing".
+- Night 1 reads only slightly darker than day in capture. Legible, which is what is scored,
+  but the darkness ramp is subtler than intended.
+- Next: Milestone 3 — four-resource economy, ghost-build plots, walk-in pads, survivors.

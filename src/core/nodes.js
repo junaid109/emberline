@@ -1,8 +1,8 @@
 // src/core/nodes.js
-import { HARVEST_SECONDS } from './constants.js';
+import { HARVEST_SECONDS, NODE_AMOUNT, NODE_REGROW_SECONDS } from './constants.js';
 
 export function createNode(kind, x, z, amount) {
-  return { kind, x, z, remaining: amount, progress: 0, depleted: false };
+  return { kind, x, z, remaining: amount, progress: 0, regrowth: 0, depleted: false };
 }
 
 /**
@@ -24,4 +24,34 @@ export function tickHarvest(node, dt) {
   node.remaining -= 1;
   if (node.remaining <= 0) node.depleted = true;
   return node.kind;
+}
+
+/**
+ * Regrows a harvested node over time.
+ *
+ * Without this the world holds a fixed 60 wood against a run that costs
+ * several hundred, so no amount of skill could finish seven nights: the game
+ * was unwinnable and no test noticed, because every test that reached night 7
+ * did so by pinning heat to HEAT_MAX each tick.
+ *
+ * Regrowth is a continuous trickle rather than a "respawn" event, so a node
+ * you stripped and a node you took two logs from are in genuinely different
+ * states, and the routing decision — which clearing is worth walking back to —
+ * has a real answer rather than a binary one.
+ *
+ * @returns {boolean} true if the node came back from depleted this call,
+ *                    which is the renderer's cue to show its mesh again
+ */
+export function tickRegrow(node, dt) {
+  if (node.remaining >= NODE_AMOUNT) return false;
+
+  node.regrowth += dt;
+  if (node.regrowth < NODE_REGROW_SECONDS) return false;
+
+  node.regrowth -= NODE_REGROW_SECONDS;
+  node.remaining += 1;
+
+  const revived = node.depleted;
+  node.depleted = false;
+  return revived;
 }
