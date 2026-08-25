@@ -57,6 +57,24 @@ class Mesh extends Object3D {
   constructor(geometry, material) { super(); this.geometry = geometry; this.material = material; }
 }
 
+class InstancedMesh extends Mesh {
+  constructor(geometry, material, count) {
+    super(geometry, material);
+    this.count = count;
+    this.matrices = new Array(count).fill(null);
+    this.instanceMatrix = { needsUpdate: false, setUsage(u) { this.usage = u; } };
+  }
+  setMatrixAt(i, m) { this.matrices[i] = { ...m }; }
+}
+
+class Matrix4 {
+  compose(p, q, s) { this.p = { ...p }; this.q = { ...q }; this.s = { ...s }; return this; }
+}
+
+class Quaternion {
+  setFromAxisAngle(axis, angle) { this.axis = axis; this.angle = angle; return this; }
+}
+
 class Light extends Object3D {
   constructor(color, intensity = 1) { super(); this.color = new Color(color); this.intensity = intensity; }
 }
@@ -71,6 +89,10 @@ class Raycaster {
 export function makeThreeStub() {
   return {
     Vector2, Vector3, Color, Object3D, Mesh, Raycaster,
+    InstancedMesh, Matrix4, Quaternion,
+    DodecahedronGeometry: Geometry,
+    IcosahedronGeometry: Geometry,
+    StaticDrawUsage: 35044,
     Group: Object3D,
     Scene: class Scene extends Object3D {},
     Fog: class Fog { constructor(color, near, far) { this.color = new Color(color); this.near = near; this.far = far; } },

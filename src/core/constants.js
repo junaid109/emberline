@@ -149,3 +149,37 @@ export const TAP_MAX_DRIFT = 18;       // CSS pixels
 // produce a single-file column that reads as a queue rather than a pack.
 // Kept well under the gap between gates, so a lane still reads as one lane.
 export const WOLF_SPAWN_SPREAD = 3.2;
+
+// --- Landscape scatter -----------------------------------------------------
+// Decorative scenery: a winter forest around the camp. None of it is
+// harvestable, which is exactly why placement has rules. A decorative conifer
+// standing where a resource tree could stand would teach the player that
+// walking into trees sometimes does nothing, and the harvest loop would start
+// feeling broken rather than the scenery feeling wrong.
+export const SCENERY_SEED = 20260825;
+
+// Low scenery only — rocks, shrubs, drifts. Nothing tree-shaped, so a conifer
+// silhouette always means "wood you can take".
+export const CAMP_SCENERY_COUNT = 34;
+
+// The treeline proper: a dense band of forest just beyond where the player can
+// walk, which is what makes the playable circle read as a clearing.
+export const TREELINE_INNER = 36;      // just outside WORLD_RADIUS
+export const TREELINE_OUTER = 96;
+export const TREELINE_COUNT = 320;
+
+// Thinning forest running out to the fog, so the world has a horizon instead
+// of an edge.
+export const FARWOOD_OUTER = 190;
+export const FARWOOD_COUNT = 240;
+
+// Clearance rules, in world units.
+export const SCENERY_GATE_CLEARANCE = 7;   // gates must stay readable
+export const SCENERY_NODE_CLEARANCE = 4;   // never crowd a harvestable
+// Nothing may stand on ground the furnace has thawed. Two reasons, and the
+// second is the important one: the thawed circle is the whole playable area and
+// it needs to stay uncluttered, and at night a static rock inside the ring
+// reads exactly like an approaching wolf. Setting this above RING_MAX means the
+// thawed ground is always clean worked earth and the frozen ground is where the
+// snow-covered rubble lives — which is also just truer to the fiction.
+export const SCENERY_CAMP_INNER = 23;      // RING_MAX (22) plus a margin

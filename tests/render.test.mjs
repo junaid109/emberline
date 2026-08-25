@@ -25,6 +25,9 @@ const actors = await import('../src/render/actors.js');
 const { createGround } = await import('../src/render/ground.js');
 const { createGroundPicker } = await import('../src/render/pick.js');
 const { syncPool, faceToward } = await import('../src/render/sync.js');
+const { createScenery } = await import('../src/render/scenery.js');
+const { scatterScenery } = await import('../src/core/scatter.js');
+const { createGates } = await import('../src/core/gates.js');
 const { createJoystick } = await import('../src/input/joystick.js');
 const { createTapper, isTapZone, isTap } = await import('../src/input/tap.js');
 const { createWorld, tickWorld, rallyToward } = await import('../src/core/world.js');
@@ -346,4 +349,45 @@ test('a live world drives the pool end to end', () => {
   assert.ok(world.wolves.length > 0, 'no wolves ever spawned');
   syncPool(pool, world.wolves, fakeMesh, faceToward(world.pad.x, world.pad.z));
   assert.equal(pool.filter((m) => m.visible).length, world.wolves.length);
+});
+
+// --- scenery ---------------------------------------------------------------
+
+test('the whole landscape draws in a handful of calls, not hundreds', () => {
+  // 600 separate Meshes would be 600 draw calls a frame: the difference between
+  // a smooth phone and a slideshow, and Playability is a quarter of the score.
+  const scene = new THREE.Scene();
+  const props = scatterScenery(createGates(), []);
+  const { count, drawCalls } = createScenery(scene, props);
+
+  assert.ok(count > 400, 'the landscape should be substantial');
+  assert.ok(drawCalls <= 16, `${drawCalls} draw calls for ${count} props`);
+  assert.equal(scene.children.length, drawCalls);
+});
+
+test('every prop gets an instance matrix, and the buffer is flagged for upload', () => {
+  const scene = new THREE.Scene();
+  const props = scatterScenery(createGates(), []);
+  createScenery(scene, props);
+
+  let instances = 0;
+  for (const mesh of scene.children) {
+    assert.equal(mesh.instanceMatrix.needsUpdate, true, 'an un-flagged buffer renders nothing');
+    assert.equal(mesh.matrices.filter(Boolean).length, mesh.count, 'an instance was left unset');
+    instances += mesh.count;
+  }
+  // Multi-part props (a pine is trunk plus two skirts) mean instances exceed props.
+  assert.ok(instances >= props.length);
+});
+
+test('an unknown prop kind is skipped rather than crashing the scene', () => {
+  const scene = new THREE.Scene();
+  const { drawCalls } = createScenery(scene, [{ kind: 'spaceship', x: 0, z: 0, scale: 1, rotY: 0 }]);
+  assert.equal(drawCalls, 0);
+});
+
+test('an empty landscape adds nothing', () => {
+  const scene = new THREE.Scene();
+  assert.deepEqual(createScenery(scene, []), { count: 0, drawCalls: 0 });
+  assert.equal(scene.children.length, 0);
 });

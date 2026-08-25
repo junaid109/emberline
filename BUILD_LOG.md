@@ -377,3 +377,90 @@ tests about starvation. They now say out loud that the fire is not their subject
   new player loses before they have learned the controls. The systems are right; the numbers
   are not. That is the day 12-14 pass, but this specific number may need moving sooner.
 - Next: Milestone 3 — four-resource economy, ghost-build plots, walk-in pads, survivors.
+
+---
+
+## Session 005 — 2026-08-25 — Seeing it at last, and a landscape to see
+
+Two browser surfaces were unavailable, so the previous session shipped Milestone 2 without
+ever seeing it render. This session built a way to look at it, found three bugs immediately,
+and then built the winter landscape the game had been missing.
+
+### Decisions locked
+
+1. **The game is captured, not previewed.** An automated browser can run JavaScript in a page
+   that is not being composited, but `requestAnimationFrame` never fires there, so the loop
+   does not run. `tools/harness.mjs` takes the clock away from the browser: rAF becomes a
+   queue the caller pumps by hand. Frames then advance on demand with an exact dt, which is a
+   better instrument than a live preview — "advance exactly twelve seconds" is one call, and
+   every capture is reproducible.
+2. **Scenery placement is core logic, not decoration.** `src/core/scatter.js` is pure and
+   tested, because where a prop may stand is a gameplay rule: none of it is harvestable, so a
+   decorative conifer inside the playable circle would teach the player that walking into
+   trees sometimes does nothing.
+3. **Nothing stands on thawed ground.** The thawed circle is the entire playable area, and a
+   static rock inside it reads exactly like an approaching wolf at night. Scenery starts
+   outside `RING_MAX`, so thawed ground is clean worked earth and the frozen ground carries
+   the snow-covered rubble — which is also truer to the fiction.
+4. **The landscape is seeded, not random.** A judge and the entrant see the same world, and a
+   screenshot stays reproducible.
+5. **Everything decorative is instanced.** Six hundred props in six draw calls. Six hundred
+   separate meshes would be six hundred draw calls a frame, and Playability is a quarter of
+   the score.
+
+### Prompted
+
+- Asked for a way to observe the running game given that no browser surface would composite.
+- Asked for a winter forest landscape with trees, rocks, shrubs and drifts, in biome bands.
+- Asked for scenery placement to be tested as a gameplay rule rather than eyeballed.
+
+### Result
+
+The first capture found what four hundred passing tests could not: **wolves were never
+rendered at all.** The pooling loop iterated the mesh pool rather than the entity list, so the
+pool never grew past zero. Wolves spawned, walked, and mauled the furnace completely
+invisibly, with nothing thrown and nothing logged. The logic moved out of the frame loop into
+`src/render/sync.js`, where seven tests now cover it; reintroducing the bug fails all seven.
+
+Two more followed from looking at it:
+
+- **The dusk telegraph was nearly unreadable.** Gates sit at radius 26 and the camera framed
+  exactly 52 units, so a lit gate landed on the frame edge, half off screen — and it is the
+  only piece of information the night decision is made from. The camera is now framed from the
+  gates rather than the heat ring, and a lit gate raises a tall beam.
+- **Wolves marched in single file**, every one spawning on the same point and walking the same
+  line. They now spread across the mouth of the gate.
+
+Then the landscape: three biome bands running outward from the clearing — low rubble on the
+frozen fringe, a dense treeline just out of reach that makes the playable circle read as a
+clearing, and thinning woods dissolving into fog so the world has a horizon rather than an
+edge. Snowy and bare conifers are mixed so the forest reads as weather rather than as one
+repeated asset.
+
+### Hand edits
+
+- The per-band clearance rule was initially one number, which let camp scenery crowd a gate
+  using the much smaller node clearance. Clearance is now per obstacle group.
+- One test measured wolf spawn positions after the wolves had already walked inward, so it was
+  really measuring their speed. It now samples on the tick each wolf appears.
+
+### Verified
+
+- 223 tests passing.
+- `npm run package` emits `emberline.zip` at 0.30MB against the 35MB cap.
+- Captured at 375x812: day, dusk with the telegraph lit, night with the landscape, wolves
+  descending an abandoned gate, and a rally tap moving the squad — which exercises the tap,
+  ground-pick and nearest-gate chain end to end.
+- The landscape draws in at most 16 calls, asserted, and every instance matrix is asserted to
+  be set and flagged for upload.
+
+### Open / next
+
+- **Still not verified on physical hardware.** Everything remains a desktop browser at phone
+  dimensions.
+- **Tuning is overdue.** The furnace still empties in ~37s against a 60s first day, so a new
+  player loses before learning the controls. Capture runs had to patch the burn rate to reach
+  a night at all, which is itself the clearest signal yet that this number is wrong.
+- Tall trees in the near field can pass between the camera and the player when the player is
+  at the southern edge. Not yet observed as a real problem; worth watching on a phone.
+- Next: Milestone 3 — four-resource economy, ghost-build plots, walk-in pads, survivors.

@@ -11,12 +11,14 @@ import {
   createWolfMesh, createSquadMesh, createGateMesh,
 } from './render/actors.js';
 import { createGround } from './render/ground.js';
+import { createScenery } from './render/scenery.js';
 import { createGroundPicker } from './render/pick.js';
 import { syncPool, faceToward } from './render/sync.js';
 import { createJoystick } from './input/joystick.js';
 import { createTapper } from './input/tap.js';
 import { ringRadius } from './core/heat.js';
 import { createWorld, tickWorld, clampDt, rallyToward } from './core/world.js';
+import { scatterScenery } from './core/scatter.js';
 import { phaseRemaining, phaseProgress } from './core/cycle.js';
 import { createHud } from './ui/hud.js';
 import { CAMERA_HEIGHT, CAMERA_DISTANCE, HEAT_MAX } from './core/constants.js';
@@ -49,6 +51,8 @@ view.scene.add(furnace);
 const squadMesh = createSquadMesh();
 view.scene.add(squadMesh);
 
+let sceneryBuilt = false;
+
 function buildWorldMeshes() {
   for (const m of nodeMeshes) view.scene.remove(m);
   for (const m of gateMeshes) view.scene.remove(m);
@@ -64,6 +68,13 @@ function buildWorldMeshes() {
     view.scene.add(mesh);
     return mesh;
   });
+
+  // The landscape is deterministic and identical every run, so it is built
+  // once and simply left alone across restarts.
+  if (!sceneryBuilt) {
+    createScenery(view.scene, scatterScenery(world.gates, world.nodes));
+    sceneryBuilt = true;
+  }
 
   player.position.set(world.player.x, 0, world.player.z);
   furnace.position.set(world.pad.x, 0, world.pad.z);
