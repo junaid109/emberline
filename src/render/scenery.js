@@ -17,44 +17,73 @@ const STONE = 0x77808c;
 const SHRUB = 0x35503f;
 
 /**
+ * The geometries and materials, built once and shared by every landscape for
+ * the rest of the session.
+ *
+ * Lazy rather than module-level because THREE is a global loaded by a separate
+ * script tag, and this module is evaluated before it exists.
+ *
+ * buildPartsets used to run on every createScenery() call. That was harmless
+ * while the landscape was built once per session — but once the layout became
+ * per-run, every restart allocated a fresh set of geometries and materials, and
+ * removing a mesh from a Three.js scene frees neither.
+ */
+let SHARED = null;
+
+function partsets() {
+  if (!SHARED) SHARED = buildPartsets();
+  return SHARED;
+}
+
+/**
  * Each builder returns parts of one prop as [geometry, material, yOffset].
  *
- * Geometries are built once, at module scope, and shared by every instance of
- * that kind. Segment counts are deliberately low — this is a low-poly art
- * style, and hundreds of copies of a smooth cone would cost real milliseconds
- * for a difference nobody can see at this camera distance.
+ * Segment counts are deliberately low — this is a low-poly art style, and
+ * hundreds of copies of a smooth cone would cost real milliseconds for a
+ * difference nobody can see at this camera distance.
  */
 function buildPartsets() {
   const cone = (r, h, seg = 7) => new THREE.ConeGeometry(r, h, seg);
   const cyl = (rt, rb, h, seg = 6) => new THREE.CylinderGeometry(rt, rb, h, seg);
 
+  // One material per colour, shared by every prop that uses it. Materials
+  // used to be created per part per call, which meant a fresh set on every
+  // restart that nothing ever freed.
+  const cache = new Map();
+  const mat = (color) => {
+    if (!cache.has(color)) {
+      cache.set(color, new THREE.MeshLambertMaterial({ color, flatShading: true }));
+    }
+    return cache.get(color);
+  };
+
   return {
     // A plain conifer: two stacked skirts on a short trunk.
     pine: [
-      [cyl(0.16, 0.22, 1.1), BARK, 0.55],
-      [cone(1.05, 2.3), NEEDLE_DARK, 2.0],
-      [cone(0.78, 1.8), NEEDLE, 3.1],
+      [cyl(0.16, 0.22, 1.1), mat(BARK), 0.55],
+      [cone(1.05, 2.3), mat(NEEDLE_DARK), 2.0],
+      [cone(0.78, 1.8), mat(NEEDLE), 3.1],
     ],
     // The same tree wearing snow. Mixing the two through the forest is what
     // makes the treeline read as weather rather than as one repeated asset.
     snowpine: [
-      [cyl(0.16, 0.22, 1.1), BARK, 0.55],
-      [cone(1.05, 2.3), NEEDLE_DARK, 2.0],
-      [cone(0.8, 1.7), SNOW, 3.15],
+      [cyl(0.16, 0.22, 1.1), mat(BARK), 0.55],
+      [cone(1.05, 2.3), mat(NEEDLE_DARK), 2.0],
+      [cone(0.8, 1.7), mat(SNOW), 3.15],
     ],
     // Dead standing trunk — visual variety, and a hint the cold kills things.
     snag: [
-      [cyl(0.1, 0.26, 3.4, 5), BARK, 1.7],
+      [cyl(0.1, 0.26, 3.4, 5), mat(BARK), 1.7],
     ],
     rock: [
-      [new THREE.DodecahedronGeometry(0.8, 0), STONE, 0.42],
+      [new THREE.DodecahedronGeometry(0.8, 0), mat(STONE), 0.42],
     ],
     shrub: [
-      [new THREE.IcosahedronGeometry(0.62, 0), SHRUB, 0.4],
+      [new THREE.IcosahedronGeometry(0.62, 0), mat(SHRUB), 0.4],
     ],
     // A flattened dome: a wind-piled bank of snow, cheap relief on a flat plane.
     drift: [
-      [new THREE.SphereGeometry(1.35, 8, 5), SNOW, 0.05],
+      [new THREE.SphereGeometry(1.35, 8, 5), mat(SNOW), 0.05],
     ],
   };
 }
@@ -64,14 +93,14 @@ function buildPartsets() {
  *
  * @param {object} scene
  * @param {{kind:string,x:number,z:number,scale:number,rotY:number}[]} props
- * @returns {{count:number, drawCalls:number, meshes:object[]}}
+ * @returns {{count:number, drawCalls:number, meshes:object[], dispose:() => void}}
  *
- * The meshes come back so the caller can remove them: the landscape is keyed to
- * the run's seed now that the layout varies, and a forest scattered around last
- * run's trees would leave props standing in this run's clearings.
+ * The landscape is keyed to the run's seed now that the layout varies, so it is
+ * rebuilt per run — a forest scattered around last run's trees would leave props
+ * standing in this run's clearings. Call dispose() before building the next one.
  */
 export function createScenery(scene, props) {
-  const partsets = buildPartsets();
+  const shared = partsets();
   const groups = groupByKind(props);
 
   const matrix = new THREE.Matrix4();
@@ -84,11 +113,10 @@ export function createScenery(scene, props) {
   const meshes = [];
 
   for (const [kind, list] of groups) {
-    const parts = partsets[kind];
+    const parts = shared[kind];
     if (!parts) continue;                 // an unknown kind is skipped, not fatal
 
-    for (const [geometry, color, yOffset] of parts) {
-      const material = new THREE.MeshLambertMaterial({ color, flatShading: true });
+    for (const [geometry, material, yOffset] of parts) {
       const mesh = new THREE.InstancedMesh(geometry, material, list.length);
 
       for (let i = 0; i < list.length; i++) {
@@ -117,5 +145,24 @@ export function createScenery(scene, props) {
     }
   }
 
-  return { count: props.length, drawCalls, meshes };
+  return {
+    count: props.length,
+    drawCalls,
+    meshes,
+
+    /**
+     * Removes this landscape and frees what it owns.
+     *
+     * The InstancedMeshes are disposed but their geometries and materials are
+     * NOT: those are shared with every other landscape built this session, and
+     * disposing them would leave the next run drawing from freed buffers.
+     */
+    dispose() {
+      for (const mesh of meshes) {
+        scene.remove(mesh);
+        mesh.dispose();
+      }
+      meshes.length = 0;
+    },
+  };
 }

@@ -98,8 +98,12 @@ function buildWorldMeshes() {
   // The landscape is keyed to the run's seed now that the layout varies, so it
   // has to be rebuilt with it — a forest scattered around last run's trees
   // would leave props standing in this run's clearings.
-  if (scenery) for (const m of scenery) view.scene.remove(m);
-  scenery = createScenery(view.scene, scatterScenery(world.gates, world.nodes, world.seed)).meshes;
+  //
+  // dispose() rather than a bare scene.remove(): removing an InstancedMesh from
+  // a Three.js scene does not free its per-instance matrix buffer, so a judge
+  // restarting five times would leak five landscapes' worth of GPU memory.
+  if (scenery) scenery.dispose();
+  scenery = createScenery(view.scene, scatterScenery(world.gates, world.nodes, world.seed));
 
   player.position.set(world.player.x, 0, world.player.z);
   furnace.position.set(world.pad.x, 0, world.pad.z);

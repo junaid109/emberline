@@ -848,3 +848,78 @@ a gift into an errand.
   the only one about the palette. That is the honest signal to watch.
 - The design document is now at 497/500 words and describes hares, weather and coal. There is
   no room left for another system without something being cut.
+
+## Session 011 — no new systems, two real defects
+
+Agreed with the brief to stop adding and start hardening. Both of these are things the game
+already had, done properly.
+
+### The offline guarantee, and a guard that could not fail
+
+A single external request during play is an automatic disqualification, and it is the one
+rule invisible from inside the finished game: it only shows up on a machine with no network,
+or on a judge's.
+
+The validator already rejected a literal `https://`. That catches an address somebody typed,
+not a request assembled at runtime out of a variable — which reads as ordinary code to any
+regex hunting for "https". So the **capability** is now banned: fetch, XMLHttpRequest,
+WebSocket, EventSource, sendBeacon, importScripts, dynamic import. Scanned in index.html
+only, since Three.js legitimately carries loaders this game never calls.
+
+Then the part worth writing down. The first version of that list went through a shell
+heredoc, which turned every `\b` into a **literal backspace character (0x08)**. The patterns
+read as "a backspace, then fetch", matched nothing whatsoever, and the guard reported a clean
+build every time. Twelve mangled characters and the whole check was decorative. This is the
+third time a heredoc has silently eaten a backslash in this project.
+
+A guard that cannot fail is worse than no guard: it is no guard plus false confidence. So the
+tests now prove every pattern matches the thing it names, and reject any pattern containing a
+control character. Mutation-tested by reintroducing the mangling — 15 boundaries mangled,
+four tests fail, including two older canvas checks that turned out to lean on the same escape.
+
+Two existing tests used `fetch("./data/levels.json")` as an acceptable relative path. Their
+subject stands; the example does not, for a stronger reason than they knew — **fetch() of a
+local file is blocked under `file://`**, which is exactly how a judge opens an unzipped
+submission. Such a build would not be reaching the network, it would simply be broken.
+
+Also verified at runtime rather than only statically: the real unpacked zip, served and
+loaded, makes **exactly two requests** — the page and `./vendor/three.js`, both same-origin
+— with zero console errors.
+
+### A GPU leak I introduced last session
+
+Measured frame cost first, since Playability is a quarter of the mark: at 393x852 with the
+buffer at 786x1704 (DPR correctly capped at 2), **0.32ms/frame by day and 0.34ms at night**,
+around 49x headroom against 60fps. That measures CPU-side cost — `__step` submits draw calls
+without waiting for the GPU — so it proves the simulation and scene graph are not the
+bottleneck, and that any phone trouble would be fill rate, where MAX_DPR is already the lever.
+
+What the same look found: **nothing in the project disposes anything**, and `buildPartsets()`
+ran on every `createScenery()` call. Harmless while the landscape was built once per session
+— but making the layout per-run (Session 009) meant every restart allocated ~13 geometries,
+13 materials and 600 instance matrices, and removing a mesh from a Three.js scene frees none
+of it. A judge restarting five times leaked five landscapes' worth of GPU memory. My own
+change caused it.
+
+The geometries and materials are now built once, lazily (THREE is a global from a separate
+script tag, so module scope is too early), and `createScenery` returns a `dispose()` that
+removes the meshes and frees their instance buffers — but deliberately does **not** dispose
+the shared geometry or material, since the next landscape draws from them.
+
+Three tests: a rebuild allocates nothing new, dispose frees the buffers while leaving the
+shared parts intact, and a landscape built after a dispose is still complete — that last one
+proving the shared parts survived in practice rather than that a flag stayed false.
+Mutation-verified.
+
+### Verified
+
+- 329 tests passing.
+- Captured at 393x852 after the refactor: the landscape still draws. Sharing geometry across
+  meshes is exactly the kind of change that silently blanks a scene.
+
+### Open / next
+
+- **Still not verified on physical hardware.** Unchanged, and now the only large gap.
+- Gate meshes still build a lamp sphere and beam cylinder per call, so three gates' worth of
+  small geometries leak per restart. Far smaller than the landscape was, but the same shape
+  of bug.

@@ -48,10 +48,21 @@ class Object3D {
   clear() { this.children.length = 0; return this; }
 }
 
-class Geometry { constructor(...args) { this.args = args; } }
-class Material {
-  constructor(opts = {}) { Object.assign(this, opts); this.color = new Color(opts.color ?? 0); }
+class Geometry {
+  constructor(...args) { this.args = args; this.disposed = false; Geometry.created++; }
+  dispose() { this.disposed = true; }
 }
+Geometry.created = 0;
+class Material {
+  constructor(opts = {}) {
+    Object.assign(this, opts);
+    this.color = new Color(opts.color ?? 0);
+    this.disposed = false;
+    Material.created++;
+  }
+  dispose() { this.disposed = true; }
+}
+Material.created = 0;
 
 class Mesh extends Object3D {
   constructor(geometry, material) { super(); this.geometry = geometry; this.material = material; }
@@ -63,8 +74,12 @@ class InstancedMesh extends Mesh {
     this.count = count;
     this.matrices = new Array(count).fill(null);
     this.instanceMatrix = { needsUpdate: false, setUsage(u) { this.usage = u; } };
+    this.disposed = false;
   }
   setMatrixAt(i, m) { this.matrices[i] = { ...m }; }
+  // Three.js frees the per-instance matrix buffer here. Removing an
+  // InstancedMesh from a scene does NOT release it.
+  dispose() { this.disposed = true; }
 }
 
 class Matrix4 {
@@ -90,6 +105,8 @@ export function makeThreeStub() {
   return {
     Vector2, Vector3, Color, Object3D, Mesh, Raycaster,
     InstancedMesh, Matrix4, Quaternion,
+    Geometry,
+    Material,
     DodecahedronGeometry: Geometry,
     IcosahedronGeometry: Geometry,
     OctahedronGeometry: Geometry,

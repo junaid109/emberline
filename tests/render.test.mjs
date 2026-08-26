@@ -427,6 +427,61 @@ test('an unknown prop kind is skipped rather than crashing the scene', () => {
 
 test('an empty landscape adds nothing', () => {
   const scene = new THREE.Scene();
-  assert.deepEqual(createScenery(scene, []), { count: 0, drawCalls: 0, meshes: [] });
+  const landscape = createScenery(scene, []);
+  assert.equal(landscape.count, 0);
+  assert.equal(landscape.drawCalls, 0);
+  assert.deepEqual(landscape.meshes, []);
+  assert.equal(typeof landscape.dispose, 'function');
   assert.equal(scene.children.length, 0);
+});
+
+test('a rebuilt landscape reuses its geometries instead of allocating fresh ones', () => {
+  // The leak this guards. Removing an InstancedMesh from a Three.js scene frees
+  // neither its geometry nor its material, so building the landscape per run —
+  // which is what varying the layout requires — used to cost a full set of both
+  // on every restart, with nothing ever released.
+  const props = scatterScenery(createGates(), []);
+
+  const first = createScenery(new THREE.Scene(), props);
+  const geoBefore = THREE.Geometry.created;
+  const matBefore = THREE.Material.created;
+
+  const second = createScenery(new THREE.Scene(), props);
+
+  assert.equal(THREE.Geometry.created, geoBefore, 'a rebuild allocated new geometries');
+  assert.equal(THREE.Material.created, matBefore, 'a rebuild allocated new materials');
+  assert.ok(first.meshes.length > 0 && second.meshes.length > 0);
+});
+
+test('disposing a landscape removes it from the scene and frees its buffers', () => {
+  const scene = new THREE.Scene();
+  const landscape = createScenery(scene, scatterScenery(createGates(), []));
+  const meshes = [...landscape.meshes];
+
+  assert.ok(meshes.length > 0);
+  assert.equal(scene.children.length, meshes.length);
+
+  landscape.dispose();
+
+  assert.equal(scene.children.length, 0, 'the landscape was left in the scene');
+  for (const m of meshes) {
+    assert.equal(m.disposed, true, 'an instance buffer was never released');
+    // The shared geometry and material must SURVIVE: the next landscape draws
+    // from them, and disposing them would leave it reading freed buffers.
+    assert.equal(m.geometry.disposed, false, 'a shared geometry was disposed');
+    assert.equal(m.material.disposed, false, 'a shared material was disposed');
+  }
+});
+
+test('a landscape built after a dispose is still complete', () => {
+  // The mirror of the test above: proving the shared parts survived in practice,
+  // not just that a flag stayed false.
+  const scene = new THREE.Scene();
+  const props = scatterScenery(createGates(), []);
+  createScenery(scene, props).dispose();
+
+  const rebuilt = createScenery(scene, props);
+  assert.ok(rebuilt.drawCalls > 0, 'the rebuilt landscape draws nothing');
+  assert.equal(rebuilt.count, props.length);
+  assert.equal(scene.children.length, rebuilt.meshes.length);
 });
