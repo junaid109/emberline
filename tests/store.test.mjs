@@ -1,10 +1,35 @@
 // tests/store.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { RESOURCES, createStore, storeAdd, storeSpend } from '../src/core/store.js';
 
-test('the four resources are wood, coal, meat and water', () => {
-  assert.deepEqual(RESOURCES, ['wood', 'coal', 'meat', 'water']);
+test('the three resources are wood, coal and meat', () => {
+  assert.deepEqual(RESOURCES, ['wood', 'coal', 'meat']);
+});
+
+test('every resource the HUD shows can actually be obtained', () => {
+  // The test that was missing. RESOURCES drives the HUD directly, so anything
+  // listed here gets a counter on screen whether or not the game can ever award
+  // it — and 'water' sat there as a permanent zero for weeks precisely because
+  // the old test asserted the LIST rather than the list's truth.
+  //
+  // The submission checklist requires that nothing is "half-finished or left in
+  // as a stub", and a counter that can never move is the clearest possible
+  // example. So: every resource must be reachable, and the proof is that the
+  // simulation names it at a point where it enters the player's hands.
+  const core = ['world.js', 'worldgen.js', 'nodes.js']
+    .map((f) => readFileSync(new URL(`../src/core/${f}`, import.meta.url), 'utf8'))
+    .join('\n');
+
+  for (const kind of RESOURCES) {
+    const awarded = new RegExp(`carryAdd\\([^)]*['"]${kind}['"]`).test(core);
+    const grows = new RegExp(`createNode\\(\\s*['"]${kind}['"]`).test(core);
+    assert.ok(
+      awarded || grows,
+      `'${kind}' has a HUD counter but nothing in the simulation ever grants it`
+    );
+  }
 });
 
 test('a new store has every resource at zero', () => {

@@ -3,7 +3,7 @@ import { RESOURCES } from '../core/store.js';
 import { HEAT_MAX, TOTAL_NIGHTS } from '../core/constants.js';
 import { EVENT_LABEL } from '../core/weather.js';
 
-const ICONS = { wood: '🪵', coal: '🪨', meat: '🥩', water: '💧' };
+const ICONS = { wood: '🪵', coal: '🪨', meat: '🥩' };
 
 const PHASE_LABEL = {
   day: 'DAY',

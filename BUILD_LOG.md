@@ -8,6 +8,11 @@ was prompt-built with AI tools.
 **Primary AI tool:** Claude Code (Claude Opus 5)
 **Supporting AI tools:** Gemini image generation (build-time asset generation only)
 
+> **The submitted build log is [`buildlog.md`](buildlog.md)**, which follows the format the
+> competition asks for. This file is the long-form engineering journal it was written from: it
+> keeps the per-session detail, the exact numbers, and the failed attempts that the submission
+> version only summarises.
+
 ---
 
 ## Format of each entry
