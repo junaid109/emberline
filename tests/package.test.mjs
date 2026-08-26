@@ -2,10 +2,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { validateZipContents, listZipEntries } from '../tools/package.mjs';
+import { validateZipContents, listZipEntries, NETWORK_APIS } from '../tools/package.mjs';
 
 // Builds a real zip on disk under a fresh temp directory, using the same
 // platform-conditional approach tools/package.mjs uses to build emberline.zip
@@ -63,11 +63,14 @@ test('rejects an external URL in index.html', () => {
   assert.ok(r.errors.some((e) => e.includes('external URL')));
 });
 
+// A relative asset reference, NOT a relative fetch. fetch() of a local file is
+// blocked under file://, which is how an unzipped submission is opened, so the
+// validator now rejects it outright — see the offline-guarantee tests below.
 test('does not flag a relative vendor path as external', () => {
   const r = validateZipContents(
     ['index.html', 'vendor/three.js'],
     1000,
-    '<script src="./vendor/three.js"></script>\nfetch("./data/levels.json")'
+    '<script src="./vendor/three.js"></script>\n<img src="./assets/icon.png">'
   );
   assert.equal(r.ok, true);
 });
@@ -86,7 +89,7 @@ test('does not flag relative paths as false positives', () => {
   const r = validateZipContents(
     ['index.html', 'vendor/three.js'],
     1000,
-    '<script src="./vendor/three.js"></script>\nfetch("./data/levels.json")'
+    '<script src="./vendor/three.js"></script>\n<img src="./assets/icon.png">'
   );
   assert.equal(r.ok, true);
   assert.deepEqual(r.errors, []);
@@ -276,4 +279,99 @@ test('a canvas with explicit width and height passes', () => {
 
 test('a missing #game rule is rejected', () => {
   assert.equal(gameErrors(NO_CANVAS_RULE).length, 1);
+});
+
+
+// --- the offline guarantee -------------------------------------------------
+//
+// A single external request during play is an automatic disqualification, and
+// it is the one rule that cannot be checked by looking at the finished game:
+// it shows up only on a machine with no network, or on a judge's.
+//
+// The literal-URL check catches an address somebody typed. These catch the
+// CAPABILITY, because a request assembled at runtime out of a variable reads as
+// perfectly ordinary code to any regex hunting for "https".
+
+/** A minimal but VALID index.html, so these tests fail only on their subject. */
+function pageWith(body) {
+  return '<!doctype html><html><head><style>'
+    + '#game { position: fixed; inset: 0; width: 100%; height: 100%; }'
+    + '</style></head><body><canvas id="game"></canvas>'
+    + '<script src="./vendor/three.js"></script><script>' + body + '</script></body></html>';
+}
+
+test('every network pattern actually matches the thing it names', () => {
+  // The most important test in this file, and the reason it exists.
+  //
+  // The first version of NETWORK_APIS was written through a shell heredoc,
+  // which turned every \b into a literal backspace (0x08). The patterns then
+  // read as "a backspace, then fetch", matched nothing whatsoever, and the
+  // guard reported a clean build every time. A guard that cannot fail is worse
+  // than no guard: it is no guard plus false confidence.
+  const samples = {
+    'fetch()': 'fetch("/x")',
+    XMLHttpRequest: 'new XMLHttpRequest()',
+    WebSocket: 'new WebSocket(u)',
+    EventSource: 'new EventSource(u)',
+    'navigator.sendBeacon': 'navigator.sendBeacon(u, d)',
+    importScripts: 'importScripts(u)',
+    'dynamic import()': 'await import(u)',
+  };
+
+  assert.equal(NETWORK_APIS.length, Object.keys(samples).length,
+    'a network API was added or removed without a sample proving it matches');
+
+  for (const api of NETWORK_APIS) {
+    const sample = samples[api.name];
+    assert.ok(sample, 'no sample for ' + api.name);
+    assert.ok(api.pattern.test(sample),
+      'the ' + api.name + ' pattern does not match ' + JSON.stringify(sample) + ' — it can never fire');
+    assert.ok(!/[\x00-\x08]/.test(api.pattern.source),
+      'the ' + api.name + ' pattern holds a control character; a \\b was mangled into a literal backspace');
+  }
+});
+
+test('the patterns do not fire on ordinary code that merely reads like them', () => {
+  // Word boundaries earn their place. Without them a variable named
+  // prefetchQueue would block a build for no reason, and a validator that
+  // cries wolf is a validator somebody switches off.
+  const innocent = 'const prefetchQueue = []; let myWebSocketShim = null; const important = 1;';
+  for (const api of NETWORK_APIS) {
+    assert.ok(!api.pattern.test(innocent), api.name + ' fired on ordinary code');
+  }
+});
+
+test('a build that could reach the network is rejected', () => {
+  for (const body of [
+    'fetch("/scores").then(r => r.json());',
+    'const x = new XMLHttpRequest();',
+    'const s = new WebSocket(host);',
+    'navigator.sendBeacon(endpoint, payload);',
+  ]) {
+    const { errors } = validateZipContents(['index.html', 'vendor/three.js'], 1000, pageWith(body));
+    assert.ok(errors.some((e) => /reach the network/.test(e)),
+      'a build containing ' + JSON.stringify(body) + ' was accepted');
+  }
+});
+
+test('an ordinary build is still accepted', () => {
+  // The mirror: a check that rejects everything is not a check.
+  const { errors } = validateZipContents(
+    ['index.html', 'vendor/three.js'], 1000,
+    pageWith('const world = createWorld(); requestAnimationFrame(frame);')
+  );
+  assert.deepEqual(errors, []);
+});
+
+test('the real shipped game contains no network capability at all', () => {
+  // Not a fixture — the actual built file. This is the check that would catch
+  // a leaderboard added the week before the deadline.
+  let built;
+  try {
+    built = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  } catch {
+    return;                                   // not built yet; nothing to assert
+  }
+  const { errors } = validateZipContents(['index.html', 'vendor/three.js'], 1000, built);
+  assert.deepEqual(errors, [], 'the built game failed packaging validation');
 });

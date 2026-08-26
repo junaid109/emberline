@@ -27,6 +27,22 @@ const EMBEDDED_THREE_MARKER = 'ShaderChunk';
  * @param {number} totalBytes   size of the zip on disk
  * @param {string} indexHtmlText  full text of index.html
  */
+/**
+ * Every way a page can start a network request.
+ *
+ * Word-boundary anchored so an ordinary identifier that merely contains one of
+ * these names does not trip the check.
+ */
+export const NETWORK_APIS = [
+  { name: 'fetch()', pattern: /\bfetch\s*\(/ },
+  { name: 'XMLHttpRequest', pattern: /\bXMLHttpRequest\b/ },
+  { name: 'WebSocket', pattern: /\bWebSocket\b/ },
+  { name: 'EventSource', pattern: /\bEventSource\b/ },
+  { name: 'navigator.sendBeacon', pattern: /\bsendBeacon\b/ },
+  { name: 'importScripts', pattern: /\bimportScripts\b/ },
+  { name: 'dynamic import()', pattern: /\bimport\s*\(/ },
+];
+
 export function validateZipContents(fileNames, totalBytes, indexHtmlText) {
   const errors = [];
 
@@ -39,6 +55,26 @@ export function validateZipContents(fileNames, totalBytes, indexHtmlText) {
   const external = indexHtmlText.match(/["'`(]\s*https?:\/\/[^"'`)\s]+/g);
   if (external) {
     errors.push(`index.html references an external URL: ${external[0].slice(0, 80)}`);
+  }
+
+  // Rule: the game code must not be able to reach the network at all.
+  //
+  // A single external request at runtime is an automatic fail, and the URL
+  // check above only catches one written as a literal. A request built at
+  // runtime — a string concatenated, a hostname from a variable — reads as
+  // perfectly ordinary code to that regex. So the CAPABILITY is what is
+  // banned here, not the spelling of one address.
+  //
+  // Only index.html is scanned. vendor/three.js legitimately contains
+  // XMLHttpRequest and fetch inside its own asset loaders, which this game
+  // never calls; banning them there would mean banning Three.js.
+  for (const api of NETWORK_APIS) {
+    if (api.pattern.test(indexHtmlText)) {
+      errors.push(
+        `index.html uses ${api.name}, which can reach the network at runtime — `
+        + 'a single external request during play is an automatic disqualification'
+      );
+    }
   }
 
   // Rule: the archive must actually carry Three.js as a vendored file. Without
