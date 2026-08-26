@@ -14,7 +14,7 @@ import {
   NODE_COUNT, NODE_RING_BASE, NODE_RING_STEP, NODE_AMOUNT, PAD_RADIUS,
   MAX_FRAME_DT, HEAT_DRAIN_NIGHT_MULT, WOLVES_FIRST_NIGHT, WOLVES_PER_NIGHT,
   WOLF_SPAWN_INTERVAL, GATE_RING_RADIUS, WOLF_SPAWN_SPREAD,
-  FROZEN_SPEED_MULT, HEAT_PER_COAL, WORLDGEN_SEED,
+  FROZEN_SPEED_MULT, HEAT_PER_COAL, WORLDGEN_SEED, SQUAD_FED_DPS_MULT, CACHE_WOOD,
 } from './constants.js';
 import { drainHeat, addFuel, ringRadius } from './heat.js';
 import { tickHarvest, tickRegrow } from './nodes.js';
@@ -25,6 +25,8 @@ import { isOnPad, createDeposit, tickDeposit } from './deposit.js';
 import { createCycle, tickCycle, wolvesForNight, gatesForNight } from './cycle.js';
 import { createGates, nearestGate, telegraph, telegraphedGates } from './gates.js';
 import { createWolf, tickWolves, reapWolves, createSquad, rallySquad, tickSquad } from './threat.js';
+import { createHares, tickHares } from './wildlife.js';
+import { createWeather, rollEvent, drainMultiplier, cacheSite } from './weather.js';
 
 /**
  * Places one run's harvestables. Kept as a named export because the renderer
@@ -43,9 +45,20 @@ export function spawnNodes(seed = WORLDGEN_SEED) {
 export function createWorld(roll = Math.random, seed = WORLDGEN_SEED) {
   const gates = createGates();
   const { nodes, boulders } = generateWorld(seed, gates);
+
+  // Day one is rolled here rather than on the first tick. It is always calm, so
+  // this settles it once and lets the per-day roll fire only on real phase
+  // transitions.
+  const weather = createWeather(seed);
+  rollEvent(weather, 1);
+
   return {
     seed,
     boulders,
+    hares: createHares(roll),
+    weather,
+    cache: null,             // a supply drop, while one is on the ground
+    squadFed: false,         // the squad ate at dusk, so it fights harder tonight
     roll,
     heat: HEAT_START,
     cycle: createCycle(),
@@ -71,6 +84,7 @@ export function createWorld(roll = Math.random, seed = WORLDGEN_SEED) {
       harvestedKind: null, depletedNode: -1, revivedNodes: [], deposited: null,
       stackChanged: false, onPad: false, onFrozen: false,
       phaseEntered: null, wolvesSpawned: 0, wolvesKilled: 0, mauled: false,
+      hareCaught: 0, eventRolled: null, cacheTaken: false,
     },
   };
 }
@@ -174,7 +188,21 @@ function tickNightCycle(world, dt, ev) {
     return;
   }
 
+  // A new day: roll its weather, and drop a cache if the roll called for one.
+  // Day one is settled in createWorld, so this only ever fires on a REAL
+  // transition — an in-tick bootstrap clause here would re-roll on the first
+  // frame of every run and quietly overwrite whatever state it found.
+  if (entered === 'day') {
+    ev.eventRolled = rollEvent(world.weather, world.cycle.night);
+    world.cache = cacheSite(world.weather, world.roll);
+  }
+
   if (entered === 'dusk') {
+    // The squad eats. Automatic on purpose: no button and no inventory screen —
+    // the player's only decision was whether to spend daylight catching a hare.
+    world.squadFed = world.store.meat > 0;
+    if (world.squadFed) world.store.meat -= 1;
+
     // The telegraph is rolled ONCE, at dusk, and the same gates are what
     // actually spawn. If these ever diverge the player is being lied to, and
     // the rally decision becomes a coin flip.
@@ -223,6 +251,9 @@ export function tickWorld(world, dt, dirX, dirZ) {
   ev.stackChanged = false;
 
   ev.phaseEntered = null;
+  ev.hareCaught = 0;
+  ev.eventRolled = null;
+  ev.cacheTaken = false;
   ev.wolvesSpawned = 0;
   ev.wolvesKilled = 0;
   ev.mauled = false;
@@ -240,7 +271,7 @@ export function tickWorld(world, dt, dirX, dirZ) {
   // Night costs multiples of what day costs. Surviving the dark is what the
   // day's hauling was FOR, and this multiplier is the whole reason it matters.
   const nightly = world.cycle.phase === 'night' ? HEAT_DRAIN_NIGHT_MULT : 1;
-  world.heat = drainHeat(world.heat, dt, HEAT_DRAIN_DAY * nightly);
+  world.heat = drainHeat(world.heat, dt, HEAT_DRAIN_DAY * nightly * drainMultiplier(world.weather));
 
   // Regrowth runs for every node, every frame, including ones the player is
   // standing in. A node the player is actively stripping is regrowing at the
@@ -268,6 +299,22 @@ export function tickWorld(world, dt, dirX, dirZ) {
     }
   }
 
+  ev.hareCaught = tickHares(world.hares, dt, world.player, world.roll);
+  for (let i = 0; i < ev.hareCaught; i++) carryAdd(world.carry, 'meat');
+
+  // A cache is walked into rather than harvested: it is a windfall, and making
+  // the player stand and chop it would turn a gift into an errand.
+  if (world.cache) {
+    const reach = Math.hypot(world.cache.x - world.player.x, world.cache.z - world.player.z);
+    if (reach <= 2.0) {
+      for (let i = 0; i < world.cache.amount && !carryIsFull(world.carry); i++) {
+        carryAdd(world.carry, 'wood');
+      }
+      world.cache = null;
+      ev.cacheTaken = true;
+    }
+  }
+
   ev.onPad = isOnPad(world.player.x, world.player.z, world.pad.x, world.pad.z, world.pad.radius);
 
   const deposited = tickDeposit(world.deposit, dt, ev.onPad, world.carry, world.store);
@@ -281,7 +328,9 @@ export function tickWorld(world, dt, dirX, dirZ) {
     }
   }
 
-  ev.wolvesKilled = tickSquad(world.squad, dt, world.wolves);
+  // A fed squad fights harder, and only for the night it ate before.
+  const bite = world.squadFed && world.cycle.phase === 'night' ? SQUAD_FED_DPS_MULT : 1;
+  ev.wolvesKilled = tickSquad(world.squad, dt, world.wolves, bite);
   world.kills += ev.wolvesKilled;
   reapWolves(world.wolves);
 

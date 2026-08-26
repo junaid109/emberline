@@ -90,7 +90,7 @@ export function squadArrived(squad) {
  * overwhelms them, which is what forces the player to keep hauling instead of
  * parking the squad and watching.
  */
-export function tickSquad(squad, dt, wolves) {
+export function tickSquad(squad, dt, wolves, damageMult = 1) {
   const dx = squad.targetX - squad.x;
   const dz = squad.targetZ - squad.z;
   const dist = Math.hypot(dx, dz);
@@ -109,7 +109,7 @@ export function tickSquad(squad, dt, wolves) {
   squad.engaging = inRange.length > 0;
   if (inRange.length === 0) return 0;
 
-  const each = (SQUAD_DPS * dt) / inRange.length;
+  const each = (SQUAD_DPS * damageMult * dt) / inRange.length;
   let killed = 0;
   for (const w of inRange) {
     w.hp -= each;

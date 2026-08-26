@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import {
   SNOW, THAWED, RING_RIM,
   PLAYER_PARKA, PLAYER_HOOD, PLAYER_SHADOW,
-  GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER,
+  GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER, HARE, CACHE_FLAG,
   contrast, rgbDistance, luminance,
 } from '../src/render/palette.js';
 
@@ -118,9 +118,30 @@ test('the ember glint marks a seam as fuel, not as rock', () => {
   assert.ok(rgbDistance(COAL_GLINT, BOULDER) > 120, 'the glint could be mistaken for rock');
 });
 
+test('a hare is never mistaken for a wolf', () => {
+  // They share a silhouette family and the same ground. Getting this wrong
+  // means running TOWARD a wolf at dusk, which is the worst possible error the
+  // palette could cause.
+  assert.ok(rgbDistance(HARE, WOLF) > 140,
+    `hare and wolf are only ${rgbDistance(HARE, WOLF).toFixed(0)} apart`);
+  assert.ok(luminance(HARE) > luminance(WOLF) * 2,
+    'the hare must be the pale one and the wolf the dark one');
+  assert.ok(contrast(HARE, SNOW) > 1.4, 'a hare disappears into the snow it lives on');
+});
+
+test('a supply cache can be picked out from across the field', () => {
+  // The flag is the whole event. A cache nobody spots is not an event, it is a
+  // message about one.
+  for (const other of [SNOW, BOULDER, COAL_SEAM, WOLF, RING_RIM, HARE]) {
+    assert.ok(rgbDistance(CACHE_FLAG, other) > 110,
+      `the cache flag is only ${rgbDistance(CACHE_FLAG, other).toFixed(0)} from something else out there`);
+  }
+});
+
 test('every actor colour is a valid 24-bit value', () => {
   for (const c of [SNOW, THAWED, RING_RIM, PLAYER_PARKA, PLAYER_HOOD,
-    PLAYER_SHADOW, GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER]) {
+    PLAYER_SHADOW, GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER,
+    HARE, CACHE_FLAG]) {
     assert.ok(Number.isInteger(c) && c >= 0 && c <= 0xffffff, `bad colour ${c}`);
   }
 });

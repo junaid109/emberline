@@ -51,6 +51,19 @@ export const COAL_SEAM = 0x23262e;
 export const COAL_GLINT = 0xff8c3a;
 export const BOULDER = 0x8b939e;
 
+// A hare has to read on snow, which rules out the white one a real winter hare
+// would be. Warm tan against blue-grey ground, and unmistakable from the wolf
+// it shares a silhouette family with — dark and low means danger, pale and
+// small means food.
+export const HARE = 0xd6a05e;
+
+// A supply cache must be findable from across the field or the event that
+// dropped it is just a message. Green because nothing else on the field is:
+// ember belongs to fire and coal, red to the guards, cyan to the player, grey
+// to rock. Green means the one thing out there that is simply good news.
+export const CACHE_CRATE = 0x6b4a2a;
+export const CACHE_FLAG = 0x2fe87f;
+
 // --- Everything else that must not be mistaken for the player --------------
 export const GUARD = 0xc0392b;         // a trio, always at a gate, inside a range ring
 export const WOLF = 0x4b4f58;

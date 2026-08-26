@@ -9,6 +9,7 @@ import { createScene } from './render/scene.js';
 import {
   createPlayer, createTree, updateStack, createFurnace,
   createWolfMesh, createSquadMesh, createGateMesh, createCoalSeam, createBoulder,
+  createHareMesh, createCacheMesh,
 } from './render/actors.js';
 import { createGround } from './render/ground.js';
 import { createScenery } from './render/scenery.js';
@@ -49,6 +50,14 @@ let boulderMeshes = [];
 // destroyed per wolf: allocating GPU resources during a wave would stutter on
 // exactly the frames already doing the most work.
 const wolfPool = [];
+
+// Hares come and go the same way wolves do, and are pooled for the same reason.
+const harePool = [];
+
+// One cache at a time, so it is built once and simply moved and hidden.
+const cacheMesh = createCacheMesh();
+cacheMesh.visible = false;
+view.scene.add(cacheMesh);
 
 const furnace = createFurnace();
 view.scene.add(furnace);
@@ -104,6 +113,23 @@ function spawnWolfMesh() {
   const mesh = createWolfMesh();
   view.scene.add(mesh);
   return mesh;
+}
+
+function spawnHareMesh() {
+  const mesh = createHareMesh();
+  view.scene.add(mesh);
+  return mesh;
+}
+
+/**
+ * Hares that have been caught are not drawn.
+ *
+ * syncPool draws the first N of a list, so a caught hare still sitting in the
+ * array would keep its mesh on screen — a ghost standing exactly where the
+ * player just took one.
+ */
+function visibleHares() {
+  return world.hares.filter((h) => h.mode !== 'gone');
 }
 
 createTapper(canvas, (x, y) => {
@@ -178,6 +204,15 @@ function orbitCamera(now, settle) {
   view.camera.lookAt(0, 0, z);
 }
 
+/** Places a hare and turns it to face the way it is running. */
+function placeHare(mesh, hare) {
+  mesh.position.x = hare.x;
+  mesh.position.z = hare.z;
+  if (hare.dirX !== 0 || hare.dirZ !== 0) {
+    mesh.rotation.y = Math.atan2(hare.dirX, hare.dirZ);
+  }
+}
+
 let last = performance.now();
 function frame(now) {
   const dt = clampDt((now - last) / 1000);
@@ -225,6 +260,10 @@ function frame(now) {
   }
 
   syncPool(wolfPool, world.wolves, spawnWolfMesh, faceToward(world.pad.x, world.pad.z));
+  syncPool(harePool, visibleHares(), spawnHareMesh, placeHare);
+
+  cacheMesh.visible = world.cache !== null;
+  if (world.cache) cacheMesh.position.set(world.cache.x, 0, world.cache.z);
 
   squadMesh.position.set(world.squad.x, 0, world.squad.z);
   squadMesh.userData.setEngaging(world.squad.engaging);
@@ -233,6 +272,7 @@ function frame(now) {
   furnace.userData.setFlame(world.heat / HEAT_MAX);
   view.setDarkness(darkness(world.cycle));
   hud.update(world, phaseRemaining(world.cycle));
+  if (ev.eventRolled) hud.announce(ev.eventRolled);
 
   view.render();
   requestAnimationFrame(frame);

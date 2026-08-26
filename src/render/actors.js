@@ -4,7 +4,7 @@ import { PAD_RADIUS, SQUAD_RANGE } from '../core/constants.js';
 
 import {
   PLAYER_PARKA, PLAYER_SKIN, PLAYER_BOOTS, PLAYER_HOOD, PLAYER_SHADOW,
-  GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER,
+  GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER, HARE, CACHE_CRATE, CACHE_FLAG,
 } from './palette.js';
 
 const COLORS = {
@@ -341,4 +341,65 @@ export function createBoulder(x, z, radius) {
   mesh.scale.set(radius, radius * 0.85, radius);
   mesh.rotation.set(x * 0.3, z * 0.7, 0.2);
   return mesh;
+}
+
+
+const HARE_BODY_GEO = new THREE.BoxGeometry(0.46, 0.38, 0.72);
+const HARE_EAR_GEO = new THREE.BoxGeometry(0.09, 0.42, 0.14);
+const HARE_MAT = new THREE.MeshLambertMaterial({ color: HARE, flatShading: true });
+
+/**
+ * A hare. Small, pale and upright-eared.
+ *
+ * Deliberately unlike the wolf it shares a silhouette family with: dark and low
+ * means danger, pale and small with ears means food. That distinction gets read
+ * at a glance, at distance, usually while the player is deciding whether they
+ * have time for it.
+ */
+export function createHareMesh() {
+  const g = new THREE.Group();
+
+  const body = new THREE.Mesh(HARE_BODY_GEO, HARE_MAT);
+  body.position.y = 0.3;
+  g.add(body);
+
+  for (const side of [-0.12, 0.12]) {
+    const ear = new THREE.Mesh(HARE_EAR_GEO, HARE_MAT);
+    ear.position.set(side, 0.66, -0.24);
+    ear.rotation.x = -0.18;
+    g.add(ear);
+  }
+
+  return g;
+}
+
+const CRATE_GEO = new THREE.BoxGeometry(1.15, 0.8, 1.15);
+const CRATE_MAT = new THREE.MeshLambertMaterial({ color: CACHE_CRATE, flatShading: true });
+const POLE_GEO = new THREE.CylinderGeometry(0.06, 0.06, 2.4, 5);
+const FLAG_GEO = new THREE.BoxGeometry(0.9, 0.5, 0.06);
+const FLAG_MAT = new THREE.MeshBasicMaterial({ color: CACHE_FLAG });
+
+/**
+ * A supply cache: a crate under a tall green flag.
+ *
+ * The flag is the whole point and is drawn unlit, so it survives the night. A
+ * cache the player cannot spot from across the field is not an event, it is a
+ * message about an event.
+ */
+export function createCacheMesh() {
+  const g = new THREE.Group();
+
+  const crate = new THREE.Mesh(CRATE_GEO, CRATE_MAT);
+  crate.position.y = 0.4;
+  g.add(crate);
+
+  const pole = new THREE.Mesh(POLE_GEO, CRATE_MAT);
+  pole.position.y = 1.5;
+  g.add(pole);
+
+  const flag = new THREE.Mesh(FLAG_GEO, FLAG_MAT);
+  flag.position.set(0.5, 2.4, 0);
+  g.add(flag);
+
+  return g;
 }

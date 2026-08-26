@@ -1,6 +1,7 @@
 // src/ui/hud.js
 import { RESOURCES } from '../core/store.js';
 import { HEAT_MAX, TOTAL_NIGHTS } from '../core/constants.js';
+import { EVENT_LABEL } from '../core/weather.js';
 
 const ICONS = { wood: '🪵', coal: '🪨', meat: '🥩', water: '💧' };
 
@@ -91,14 +92,45 @@ export function createHud(root) {
   // The HUD is built at boot but must not be on screen during the title card:
   // four resource counters reading zero, over a card telling the player what
   // the game is, answers a question nobody has asked yet.
+  // A day's weather, announced once and then faded. Placed below the phase
+  // banner rather than replacing it: what phase it is never stops mattering,
+  // and an event that hid the clock would be a worse trade than no event.
+  const toast = document.createElement('div');
+  toast.style.cssText = [
+    'position:absolute', 'top:78px', 'left:50%', 'transform:translateX(-50%)',
+    'font:800 13px system-ui', 'letter-spacing:.14em', 'white-space:nowrap',
+    'padding:5px 14px', PILL, 'color:#9fe8b4',
+    'pointer-events:none', 'opacity:0', 'transition:opacity .5s ease',
+  ].join(';');
+  root.append(toast);
+
+  let toastTimer = null;
+
   const chrome = [panel, fuel, banner];
   const shown = chrome.map((n) => n.style.display || '');
   for (const n of chrome) n.style.display = 'none';
 
   return {
+    /**
+     * Announces the day's weather, once.
+     *
+     * A calm day says nothing at all: an "ALL CLEAR" every other morning would
+     * train the player to stop reading the one line that matters when it is not.
+     */
+    announce(event) {
+      const label = EVENT_LABEL[event];
+      if (!label) return;
+
+      toast.textContent = label;
+      toast.style.opacity = '1';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 3200);
+    },
+
     /** @param {boolean} on shows or hides the live HUD (not the end-of-run card) */
     setVisible(on) {
       chrome.forEach((n, i) => { n.style.display = on ? shown[i] : 'none'; });
+      if (!on) toast.style.opacity = '0';
     },
 
     /** @param {() => void} fn called when the player asks for another run */

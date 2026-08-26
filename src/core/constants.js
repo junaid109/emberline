@@ -288,3 +288,37 @@ export const BOULDER_INNER = 24;
 export const BOULDER_OUTER = 30;
 export const BOULDER_GATE_CLEARANCE = 6;   // a lane must stay walkable and readable
 export const BOULDER_NODE_CLEARANCE = 4.5; // never wall a harvestable off
+
+// --- Wildlife --------------------------------------------------------------
+// Hares. They are the only meat in the world, and meat is the only thing that
+// makes a night cheaper, so chasing one is a real trade: the daylight you spend
+// on it is daylight you did not spend hauling fuel.
+//
+// They dart and freeze rather than flee steadily. A steady flee at any speed is
+// either uncatchable or a formality; darting makes the chase something you read
+// and time, and it is what a hare actually does.
+export const HARE_COUNT = 4;               // alive at once
+export const HARE_DART_SPEED = 6.2;
+export const HARE_DART_SECONDS = 0.55;
+export const HARE_STILL_SECONDS = 0.85;    // frozen, watching — this is your window
+export const HARE_WANDER_SPEED = 1.6;
+export const HARE_FLEE_RADIUS = 7.0;       // where it notices you
+export const HARE_CATCH_RADIUS = 1.3;
+export const HARE_RESPAWN_SECONDS = 22;
+export const HARE_INNER = 24;              // the wilds, like the coal and the rock
+export const HARE_OUTER = 32;
+
+// Meat feeds the guard squad at dusk: one is eaten, and that night the squad
+// fights harder. Automatic on purpose — no button, no inventory screen. The
+// player's only decision is whether to spend the daylight catching one.
+export const SQUAD_FED_DPS_MULT = 1.7;
+
+// --- Weather ---------------------------------------------------------------
+// One event rolled per day, so no two runs pressure the player in the same
+// order. Never on day one: the first day is the only tutorial the game has, and
+// a blizzard during it would teach the wrong lesson about what is normal.
+export const BLIZZARD_DRAIN_MULT = 1.7;    // the furnace fights the wind
+export const BLIZZARD_DARKNESS = 0.45;     // daylight dims, but never to night
+export const CACHE_WOOD = 10;              // a supply drop, out in the wilds
+export const CACHE_INNER = 25;
+export const CACHE_OUTER = 31;

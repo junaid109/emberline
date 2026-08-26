@@ -779,3 +779,72 @@ variation, it is a broken run that only some players get.
   its invariant harness are the foundation both will use.
 - The scenery is now rebuilt per run rather than once, which is more per-restart work than
   before. Not measured on a phone yet.
+
+## Session 010 — wildlife and weather
+
+### Hares, and why they are a decision
+
+A hare is not scenery. Meat is the only thing in the game that makes a night cheaper — the
+guard squad eats one at dusk and fights harder that night — so the daylight spent chasing one
+is daylight not spent hauling fuel. That is a trade on axes the game already has, which is
+the only kind of content worth adding to something judged on Focus.
+
+They **dart and freeze** rather than fleeing steadily. A steady flee is either uncatchable or
+a formality depending on one speed constant, and neither of those is a chase; the still beat
+is the player's window, and it is the whole interaction. It is also what a hare actually does.
+
+The load-bearing test is that a chase can be **won**: hares live out in the wilds, which the
+player crosses at FROZEN_SPEED_MULT, so an uncatchable hare would not be a hard chase — it
+would be a lie about a choice that does not exist. The mirror is tested too: a darting hare
+must outrun the player, or meat is a pickup rather than a decision.
+
+Feeding is automatic at dusk. No button, no inventory screen. The player's only decision was
+whether to spend the daylight.
+
+### Weather
+
+One event rolled per day: calm, blizzard, or a supply cache dropped out in the wilds. Most
+days are ordinary by weight, and that is tested in both directions — a world where every day
+is an emergency has no emergencies.
+
+**Day one is always calm, on every seed.** Not politeness: the first day is the only tutorial
+this game has, the place a player learns what a normal burn feels like and that the outer
+trees are out of reach. A blizzard during it would teach them that the normal state of the
+world is emergency, and every judgement they formed afterwards would be calibrated against a
+lie.
+
+A cache is walked into, not harvested. Making the player stand and chop a windfall would turn
+a gift into an errand.
+
+### Two bugs the tests caught
+
+- **A bootstrap clause was re-rolling the weather on the first frame of every run.** I had
+  written `entered === 'day' || (entered === null && …)` to catch day one, and it quietly
+  overwrote any state it found — including two tests' setup. Day one is now settled in
+  `createWorld`, so the per-day roll only fires on a real transition.
+- **A degenerate roll stacked every hare on one point.** `createWorld(() => 0.5)` feeds a
+  constant straight into hare placement, so all four spawned identically and a player standing
+  there took the lot in one tick. Real play uses Math.random, but it is worth a test.
+
+### Verified
+
+- 321 tests passing.
+- Captured live at 393x852: hares rendering with upright ears beside a boulder, and a supply
+  cache at night with its green flag readable across the field.
+- New palette rules: a hare must never be mistaken for a wolf (they share a silhouette family
+  and the same ground — running TOWARD a wolf at dusk is the worst error a palette could
+  cause), and the cache flag must be distinct from everything else in the wilds. The first
+  green I picked sat 96 RGB units from the boulder grey and the test rejected it.
+- Reaching a cache day needed the burn rate and the wolves patched, since an idle player never
+  survives to day two. **Constants restored and re-verified** — 1.1, 3, 2.
+
+### Open / next
+
+- **Still not verified on physical hardware.**
+- **Focus is now the risk.** Focus is 15% of the score, and this session added wildlife,
+  weather, caches and a squad buff on top of coal and boulders. Each earns its place by
+  feeding the fire or the night, and nothing added a second meter or a spend screen — but the
+  design document had to be trimmed three times to fit, and the sentence cut to make room was
+  the only one about the palette. That is the honest signal to watch.
+- The design document is now at 497/500 words and describes hares, weather and coal. There is
+  no room left for another system without something being cut.
