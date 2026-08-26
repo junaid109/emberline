@@ -234,3 +234,57 @@ export const IGNITION_HOLD_SECONDS = 0.9;
 // moving train; losing 0.9s of progress to that would feel like the game
 // blaming the player before the run has even started.
 export const IGNITION_DECAY_MULT = 2.0;
+
+// --- Procedural world generation -------------------------------------------
+// Every run generated the same forest: the same ten trees at the same ten
+// angles, the same scenery from one fixed seed. A second run taught the player
+// nothing new, which is a direct cost to the reason anyone plays twice.
+//
+// The layout is now seeded per run. The BANDS stay fixed, because the
+// relationships they encode are load-bearing — a full furnace thaws exactly to
+// the outer band, and the run opens with that band out of reach — but which
+// angle and which radius inside a band is rolled fresh each time.
+export const WORLDGEN_SEED = 20260826;     // the default; play passes a live seed
+export const NODE_ANGLE_JITTER = 0.42;     // radians either side of the even spacing
+export const NODE_RADIUS_JITTER = 1.6;     // world units either side of the band
+
+// Minimum gap between any two harvestables. The harvest loop takes the FIRST
+// node in range and stops, so two trees inside each other make which one you
+// are cutting depend on array order — invisible and unpredictable to the
+// player. Jitter alone could not prevent it: NODE_RADIUS_JITTER either side of
+// bands NODE_RING_STEP apart lets two adjacent bands come within 0.8 units.
+export const NODE_MIN_SPACING = 3.6;
+
+// --- Coal ------------------------------------------------------------------
+// A second fuel, and the reason the frozen waste is worth entering. Coal burns
+// far hotter than wood but every seam lies outside the thawed ring, on ground
+// crossed at FROZEN_SPEED_MULT — so the better fuel always costs the walk.
+// That is the thaw mechanic paying for itself rather than a new system beside
+// it, which is why coal exists and a fifth resource does not.
+export const HEAT_PER_COAL = 15;           // vs HEAT_PER_WOOD 6
+export const COAL_SEAMS = 5;
+export const COAL_AMOUNT = 4;              // lumps per seam, vs NODE_AMOUNT 6 for a tree
+export const COAL_REGROW_SECONDS = 55;     // a seam is not a forest; it comes back slowly
+export const COAL_INNER = 24;              // clear of RING_MAX (22): always on frozen ground
+export const COAL_OUTER = 31;              // clear of WORLD_RADIUS (34) minus the edge margin
+
+// --- Boulders --------------------------------------------------------------
+// Blocking obstacles, so the shortest line between two points is not always
+// available and routing is a decision rather than a straight line.
+//
+// They stand only on frozen ground, for the same reason scenery does: the
+// thawed circle is the whole playable camp and must stay clean, and at night a
+// static shape inside the ring reads exactly like an approaching wolf.
+// Nine, not fourteen. The band boulders may occupy is narrow (24 to 30) and
+// already carries the coal seams and three gate exclusion zones; asking for
+// fourteen made the rejection sampler give up part-way on some seeds, so some
+// runs quietly generated fewer obstacles than others.
+export const BOULDER_COUNT = 9;
+export const BOULDER_RADIUS = 1.7;         // collision radius, and roughly the drawn size
+export const BOULDER_INNER = 24;
+// Bounded so that ejecting the player from a boulder at the outer limit still
+// leaves them inside the world: BOULDER_OUTER + BOULDER_RADIUS + body must stay
+// under WORLD_RADIUS - WORLD_EDGE_MARGIN. Pinned in tests/worldgen.test.mjs.
+export const BOULDER_OUTER = 30;
+export const BOULDER_GATE_CLEARANCE = 6;   // a lane must stay walkable and readable
+export const BOULDER_NODE_CLEARANCE = 4.5; // never wall a harvestable off

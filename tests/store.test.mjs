@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RESOURCES, createStore, storeAdd, storeSpend } from '../src/core/store.js';
 
-test('the four resources are wood, meat, water and stone', () => {
-  assert.deepEqual(RESOURCES, ['wood', 'meat', 'water', 'stone']);
+test('the four resources are wood, coal, meat and water', () => {
+  assert.deepEqual(RESOURCES, ['wood', 'coal', 'meat', 'water']);
 });
 
 test('a new store has every resource at zero', () => {
@@ -16,7 +16,7 @@ test('adding increases the named resource only', () => {
   const s = createStore();
   storeAdd(s, 'wood', 3);
   assert.equal(s.wood, 3);
-  assert.equal(s.stone, 0);
+  assert.equal(s.coal, 0);
 });
 
 test('spending succeeds when affordable and deducts', () => {

@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import {
   SNOW, THAWED, RING_RIM,
   PLAYER_PARKA, PLAYER_HOOD, PLAYER_SHADOW,
-  GUARD, WOLF, WOLF_EYE,
+  GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER,
   contrast, rgbDistance, luminance,
 } from '../src/render/palette.js';
 
@@ -95,9 +95,32 @@ test('the two grounds are obviously different from each other', () => {
     'the two grounds are too close in brightness to separate at a glance');
 });
 
+test('a coal seam is never mistaken for a boulder', () => {
+  // The two things out on the frozen ground, and the distinction is the whole
+  // reason to go there: one is worth the slow walk, the other is in the way.
+  assert.ok(rgbDistance(COAL_SEAM, BOULDER) > 100,
+    `seam and boulder are only ${rgbDistance(COAL_SEAM, BOULDER).toFixed(0)} apart`);
+  assert.ok(luminance(COAL_SEAM) < luminance(BOULDER) / 3,
+    'coal must be the dark one and rock the pale one');
+});
+
+test('both read against the snow they stand on', () => {
+  // Everything in the wilds sits on frozen ground by construction, so snow is
+  // the only background either of them ever has.
+  assert.ok(contrast(COAL_SEAM, SNOW) > 4, 'a coal seam disappears into the snow');
+  assert.ok(rgbDistance(BOULDER, SNOW) > 90, 'a boulder disappears into the snow');
+});
+
+test('the ember glint marks a seam as fuel, not as rock', () => {
+  // Drawn unlit so it survives the night: a player deciding whether a walk into
+  // the dark is worth it has to be able to see what is out there.
+  assert.ok(contrast(COAL_GLINT, COAL_SEAM) > 4, 'the glint is lost against the coal');
+  assert.ok(rgbDistance(COAL_GLINT, BOULDER) > 120, 'the glint could be mistaken for rock');
+});
+
 test('every actor colour is a valid 24-bit value', () => {
   for (const c of [SNOW, THAWED, RING_RIM, PLAYER_PARKA, PLAYER_HOOD,
-    PLAYER_SHADOW, GUARD, WOLF, WOLF_EYE]) {
+    PLAYER_SHADOW, GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER]) {
     assert.ok(Number.isInteger(c) && c >= 0 && c <= 0xffffff, `bad colour ${c}`);
   }
 });

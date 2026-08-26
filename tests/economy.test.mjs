@@ -130,12 +130,15 @@ test('the forest regrows a node that was stripped bare', () => {
 });
 
 test('regrowth stops at a full node rather than overflowing it', () => {
+  // Against each node's OWN cap, not a global one: a coal seam holds fewer
+  // lumps than a tree holds logs, and comes back far more slowly.
   const world = createWorld(() => 0.5);
   for (let t = 0; t < (NODE_REGROW_SECONDS * 4) / STEP; t++) {
     world.heat = HEAT_MAX;
     tickWorld(world, STEP, 0, 0);
   }
-  for (const n of world.nodes) assert.equal(n.remaining, NODE_AMOUNT);
+  for (const n of world.nodes) assert.equal(n.remaining, n.cap);
+  assert.ok(world.nodes.some((n) => n.cap === NODE_AMOUNT), 'no tree in the world');
 });
 
 test('the forest regrows slower than one player can carry it away', () => {

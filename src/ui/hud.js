@@ -2,7 +2,7 @@
 import { RESOURCES } from '../core/store.js';
 import { HEAT_MAX, TOTAL_NIGHTS } from '../core/constants.js';
 
-const ICONS = { wood: '🪵', meat: '🥩', water: '💧', stone: '🪨' };
+const ICONS = { wood: '🪵', coal: '🪨', meat: '🥩', water: '💧' };
 
 const PHASE_LABEL = {
   day: 'DAY',

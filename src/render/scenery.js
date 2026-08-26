@@ -64,7 +64,11 @@ function buildPartsets() {
  *
  * @param {object} scene
  * @param {{kind:string,x:number,z:number,scale:number,rotY:number}[]} props
- * @returns {{count:number, drawCalls:number}}
+ * @returns {{count:number, drawCalls:number, meshes:object[]}}
+ *
+ * The meshes come back so the caller can remove them: the landscape is keyed to
+ * the run's seed now that the layout varies, and a forest scattered around last
+ * run's trees would leave props standing in this run's clearings.
  */
 export function createScenery(scene, props) {
   const partsets = buildPartsets();
@@ -77,6 +81,7 @@ export function createScenery(scene, props) {
   const scaleVec = new THREE.Vector3();
 
   let drawCalls = 0;
+  const meshes = [];
 
   for (const [kind, list] of groups) {
     const parts = partsets[kind];
@@ -107,9 +112,10 @@ export function createScenery(scene, props) {
       mesh.frustumCulled = false;
 
       scene.add(mesh);
+      meshes.push(mesh);
       drawCalls++;
     }
   }
 
-  return { count: props.length, drawCalls };
+  return { count: props.length, drawCalls, meshes };
 }

@@ -1,8 +1,17 @@
 // src/core/nodes.js
-import { HARVEST_SECONDS, NODE_AMOUNT, NODE_REGROW_SECONDS } from './constants.js';
+import { HARVEST_SECONDS, NODE_REGROW_SECONDS } from './constants.js';
 
-export function createNode(kind, x, z, amount) {
-  return { kind, x, z, remaining: amount, progress: 0, regrowth: 0, depleted: false };
+/**
+ * @param {number} [regrowSeconds] seconds per log/lump grown back.
+ *
+ * Per node rather than global: a coal seam and a tree are both harvestables,
+ * but a forest comes back within a run and a seam does not.
+ */
+export function createNode(kind, x, z, amount, regrowSeconds = NODE_REGROW_SECONDS) {
+  return {
+    kind, x, z, remaining: amount, cap: amount,
+    progress: 0, regrowth: 0, regrowSeconds, depleted: false,
+  };
 }
 
 /**
@@ -43,12 +52,12 @@ export function tickHarvest(node, dt) {
  *                    which is the renderer's cue to show its mesh again
  */
 export function tickRegrow(node, dt) {
-  if (node.remaining >= NODE_AMOUNT) return false;
+  if (node.remaining >= node.cap) return false;
 
   node.regrowth += dt;
-  if (node.regrowth < NODE_REGROW_SECONDS) return false;
+  if (node.regrowth < node.regrowSeconds) return false;
 
-  node.regrowth -= NODE_REGROW_SECONDS;
+  node.regrowth -= node.regrowSeconds;
   node.remaining += 1;
 
   const revived = node.depleted;

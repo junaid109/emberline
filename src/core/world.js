@@ -13,11 +13,12 @@ import {
   HEAT_START, HEAT_DRAIN_DAY, HEAT_PER_WOOD, CARRY_CAP, HARVEST_RANGE,
   NODE_COUNT, NODE_RING_BASE, NODE_RING_STEP, NODE_AMOUNT, PAD_RADIUS,
   MAX_FRAME_DT, HEAT_DRAIN_NIGHT_MULT, WOLVES_FIRST_NIGHT, WOLVES_PER_NIGHT,
-  FROZEN_SPEED_MULT,
   WOLF_SPAWN_INTERVAL, GATE_RING_RADIUS, WOLF_SPAWN_SPREAD,
+  FROZEN_SPEED_MULT, HEAT_PER_COAL, WORLDGEN_SEED,
 } from './constants.js';
 import { drainHeat, addFuel, ringRadius } from './heat.js';
-import { createNode, tickHarvest, tickRegrow } from './nodes.js';
+import { tickHarvest, tickRegrow } from './nodes.js';
+import { generateWorld, pushOutOfBoulders } from './worldgen.js';
 import { createCarry, carryAdd, carryTotal, carryIsFull } from './carry.js';
 import { createStore } from './store.js';
 import { isOnPad, createDeposit, tickDeposit } from './deposit.js';
@@ -26,23 +27,25 @@ import { createGates, nearestGate, telegraph, telegraphedGates } from './gates.j
 import { createWolf, tickWolves, reapWolves, createSquad, rallySquad, tickSquad } from './threat.js';
 
 /**
- * Places the starting resource nodes on three interleaved rings around the
- * furnace. Returns a plain array; index is the node's stable identity, and
- * the renderer keys its meshes off that same index.
+ * Places one run's harvestables. Kept as a named export because the renderer
+ * and several tests reach for it directly.
+ *
+ * @deprecated by generateWorld — retained so the old shape still resolves.
  */
-export function spawnNodes(count = NODE_COUNT) {
-  const nodes = [];
-  for (let i = 0; i < count; i++) {
-    const a = (i / count) * Math.PI * 2;
-    const r = NODE_RING_BASE + (i % 3) * NODE_RING_STEP;
-    nodes.push(createNode('wood', Math.cos(a) * r, Math.sin(a) * r, NODE_AMOUNT));
-  }
-  return nodes;
+export function spawnNodes(seed = WORLDGEN_SEED) {
+  return generateWorld(seed).nodes;
 }
 
-export function createWorld(roll = Math.random) {
+/**
+ * @param {() => number} roll  injected RNG for the telegraph, so tests can pin it
+ * @param {number} seed        the run's world layout; play passes a live value
+ */
+export function createWorld(roll = Math.random, seed = WORLDGEN_SEED) {
   const gates = createGates();
+  const { nodes, boulders } = generateWorld(seed, gates);
   return {
+    seed,
+    boulders,
     roll,
     heat: HEAT_START,
     cycle: createCycle(),
@@ -59,7 +62,7 @@ export function createWorld(roll = Math.random) {
     carry: createCarry(CARRY_CAP),
     store: createStore(),
     deposit: createDeposit(),
-    nodes: spawnNodes(),
+    nodes,
     pad: { x: 0, z: 0, radius: PAD_RADIUS },
 
     // Reused every frame rather than reallocated. Consumers must read it
@@ -95,7 +98,7 @@ export function clampDt(rawSeconds) {
  *
  * @returns {boolean} whether the player is standing on frozen ground
  */
-function movePlayer(player, dirX, dirZ, dt, thawedRadius) {
+function movePlayer(player, dirX, dirZ, dt, thawedRadius, boulders) {
   const frozen = Math.hypot(player.x, player.z) > thawedRadius;
   if (dirX === 0 && dirZ === 0) return frozen;
 
@@ -110,6 +113,10 @@ function movePlayer(player, dirX, dirZ, dt, thawedRadius) {
     player.x *= k;
     player.z *= k;
   }
+
+  // Boulders are resolved after the world edge, so being pushed out of a rock
+  // can never be what puts the player outside the world.
+  pushOutOfBoulders(player, boulders);
 
   player.angle = Math.atan2(dirX, dirZ);
   return frozen;
@@ -228,7 +235,7 @@ export function tickWorld(world, dt, dirX, dirZ) {
 
   // Read the ring BEFORE this frame's drain, so the ground the player felt
   // underfoot is the same ground that was drawn for them last frame.
-  ev.onFrozen = movePlayer(world.player, dirX, dirZ, dt, ringRadius(world.heat));
+  ev.onFrozen = movePlayer(world.player, dirX, dirZ, dt, ringRadius(world.heat), world.boulders);
 
   // Night costs multiples of what day costs. Surviving the dark is what the
   // day's hauling was FOR, and this multiplier is the whole reason it matters.
@@ -268,6 +275,9 @@ export function tickWorld(world, dt, dirX, dirZ) {
     ev.deposited = deposited;
     for (const kind of deposited) {
       if (kind === 'wood') world.heat = addFuel(world.heat, HEAT_PER_WOOD);
+      // Coal burns far hotter than wood, which is what pays for the slow walk
+      // out onto frozen ground to fetch it.
+      if (kind === 'coal') world.heat = addFuel(world.heat, HEAT_PER_COAL);
     }
   }
 

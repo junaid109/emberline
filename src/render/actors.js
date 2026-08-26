@@ -4,7 +4,7 @@ import { PAD_RADIUS, SQUAD_RANGE } from '../core/constants.js';
 
 import {
   PLAYER_PARKA, PLAYER_SKIN, PLAYER_BOOTS, PLAYER_HOOD, PLAYER_SHADOW,
-  GUARD, WOLF, WOLF_EYE,
+  GUARD, WOLF, WOLF_EYE, COAL_SEAM, COAL_GLINT, BOULDER,
 } from './palette.js';
 
 const COLORS = {
@@ -285,4 +285,60 @@ export function createGateMesh(x, z) {
   };
 
   return g;
+}
+
+
+// --- the wilds -------------------------------------------------------------
+
+// Sized from a capture at the reference layout rather than by eye in isolation:
+// at 0.62 the seam read as a speck of grit beside the boulders, and a player
+// cannot choose to walk out for fuel they cannot see is there.
+const SEAM_GEO = new THREE.DodecahedronGeometry(0.86, 0);
+const SEAM_MAT = new THREE.MeshLambertMaterial({ color: COAL_SEAM, flatShading: true });
+const GLINT_GEO = new THREE.OctahedronGeometry(0.34, 0);
+const GLINT_MAT = new THREE.MeshBasicMaterial({ color: COAL_GLINT });
+
+/**
+ * A coal seam: a cluster of near-black lumps with an ember glint on top.
+ *
+ * The glint is MeshBasic rather than lit, so it stays bright at night. A seam
+ * is worth crossing frozen ground for, and a player has to be able to pick one
+ * out in the dark to decide whether the walk is worth it.
+ */
+export function createCoalSeam(x, z) {
+  const g = new THREE.Group();
+
+  const offsets = [[0, 0, 0.8], [0.82, 0.34, 0.6], [-0.76, 0.28, 0.62], [0.14, -0.7, 0.5]];
+  for (const [ox, oz, scale] of offsets) {
+    const lump = new THREE.Mesh(SEAM_GEO, SEAM_MAT);
+    lump.position.set(ox, 0.34 * scale, oz);
+    lump.scale.setScalar(scale);
+    lump.rotation.set(ox, oz, 0.4);
+    g.add(lump);
+  }
+
+  const glint = new THREE.Mesh(GLINT_GEO, GLINT_MAT);
+  glint.position.set(0.05, 0.96, 0.05);
+  g.add(glint);
+
+  g.position.set(x, 0, z);
+  return g;
+}
+
+const BOULDER_GEO = new THREE.DodecahedronGeometry(1, 0);
+const BOULDER_MAT = new THREE.MeshLambertMaterial({ color: BOULDER, flatShading: true });
+
+/**
+ * A blocking boulder, drawn at the radius the simulation actually collides at.
+ *
+ * The size is passed in rather than chosen here: a rock the player bounces off
+ * two metres before touching would read as a bug in the controls, which is a
+ * far worse feeling than an ugly rock.
+ */
+export function createBoulder(x, z, radius) {
+  const mesh = new THREE.Mesh(BOULDER_GEO, BOULDER_MAT);
+  mesh.position.set(x, radius * 0.55, z);
+  mesh.scale.set(radius, radius * 0.85, radius);
+  mesh.rotation.set(x * 0.3, z * 0.7, 0.2);
+  return mesh;
 }

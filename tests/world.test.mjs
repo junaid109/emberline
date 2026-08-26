@@ -57,9 +57,12 @@ test('MAX_FRAME_DT stays below HARVEST_SECONDS, or tickHarvest silently drops yi
 
 // --- spawn -----------------------------------------------------------------
 
-test('spawnNodes places NODE_COUNT nodes, all outside the deposit pad', () => {
+test('spawnNodes places every harvestable in the run, all outside the deposit pad', () => {
+  // NODE_COUNT trees plus the coal seams. The seams are harvestables too, so
+  // counting only trees here would stop noticing half of what it guards.
   const nodes = spawnNodes();
-  assert.equal(nodes.length, NODE_COUNT);
+  assert.equal(nodes.filter((n) => n.kind === 'wood').length, NODE_COUNT);
+  assert.ok(nodes.some((n) => n.kind === 'coal'), 'the run generated no coal at all');
   for (const n of nodes) {
     assert.ok(Math.hypot(n.x, n.z) > 5, 'a node spawned on top of the furnace');
     assert.ok(Math.hypot(n.x, n.z) < WORLD_RADIUS, 'a node spawned outside the world');
@@ -306,13 +309,15 @@ test('heat gained by depositing is capped at HEAT_MAX', () => {
   assert.ok(w.heat <= HEAT_MAX);
 });
 
-test('non-wood resources bank into the store without touching heat', () => {
+test('non-fuel resources bank into the store without touching heat', () => {
+  // Meat, not coal: coal is a fuel and is supposed to raise heat. The subject
+  // here is that banking something the furnace cannot burn leaves it alone.
   const w = createWorld();
-  w.carry.items.push('stone', 'stone');
+  w.carry.items.push('meat', 'meat');
   standAt(w, w.pad.x, w.pad.z);
   const heatBefore = w.heat;
   run(w, 60);
-  assert.equal(w.store.stone, 2);
+  assert.equal(w.store.meat, 2);
   assert.equal(w.store.wood, 0);
   assert.ok(w.heat < heatBefore, 'heat should only have drained, never risen');
 });

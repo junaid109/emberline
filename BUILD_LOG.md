@@ -698,3 +698,84 @@ matching how `emberline.zip` is already treated.
 - The design document describes the game as it now stands. If Milestone 3 lands it needs
   revising — and it is 50 words from the ceiling, so something would have to go.
 - Next: Milestone 3 — four-resource economy, ghost-build plots, walk-in pads, survivors.
+
+## Session 009 — a world that is not the same world every time
+
+### The world was a fixed set
+
+Ten trees, ten fixed angles, one scenery seed. Every run generated the identical forest, so
+a second run taught the player nothing they had not already seen — a direct cost to the only
+reason anyone replays a ten-minute game.
+
+`src/core/worldgen.js` now generates the layout from a per-run seed. What varies and what
+does not is deliberate: the three node BANDS stay fixed, because the relationships they
+encode carry the whole opening of the game — a full furnace thaws exactly to the outer band,
+and a run opens with that band just out of reach. Which angle and which radius *inside* a
+band is rolled fresh. Every run is a different forest and the same lesson.
+
+### Coal, and why not a fifth resource
+
+The HUD had four slots and three had been permanently zero since the first milestone: the
+interface was promising an economy the game did not have. Rather than invent something new,
+`stone` became **coal** — a stone does not burn, and coal is a second FUEL, which deepens
+the loop that already exists instead of opening a second one beside it.
+
+Every seam lies **outside the thawed ring**, by construction and by test. That is the whole
+design: coal burns at 15 against wood's 6, but the good fuel always sits on ground crossed at
+FROZEN_SPEED_MULT. The thaw mechanic pays for itself rather than being decorated.
+
+A probe of a winning run: 310 wood against 3 coal. Coal is *rare under naive play*, which is
+correct — it is a choice a player makes when the fire is low and they want a big hit, not the
+default route. A test pins that it is worth the walk (a lump beats two logs) and that the
+coal in the ground never outweighs the forest, so it stays a detour.
+
+### Boulders
+
+Blocking obstacles, so the shortest line between two points is not always available.
+Resolved by *ejection* rather than by refusing the move: refusing lets a player hold the
+stick into a rock and stick there, which reads as the game having frozen, where sliding
+around it reads as a rock.
+
+### Fuzzing found three real bugs
+
+The point of a generator is that nobody will ever look at most of its output, so
+`tests/worldgen.test.mjs` runs 240 seeds against playability invariants. On the first run it
+failed three of them, all of which the default seed happened to hide:
+
+1. **The rejection sampler gave up.** Fourteen boulders would not fit the narrow band that
+   also holds the coal seams and three gate exclusion zones, so some seeds quietly generated
+   fewer obstacles than others. Now nine, and asserted exactly nine on every seed.
+2. **Two harvestables generated 1.6 units apart.** Jitter either side of bands
+   NODE_RING_STEP apart lets adjacent bands come within 0.8 units — well inside harvest
+   range. The harvest loop takes the FIRST node in range and stops, so which tree you were
+   cutting would have depended on array order: invisible and unpredictable. Placement now
+   retries against a minimum spacing, falling back to the un-jittered slot.
+3. **A boulder near the rim could eject the player out of the world.** Ejection runs after
+   the world-edge clamp, so the outer limit had to be bounded by
+   `BOULDER_OUTER + BOULDER_RADIUS + body < WORLD_RADIUS - WORLD_EDGE_MARGIN`. Now pinned.
+
+Every other invariant is the same kind of rule: no seam walled off by rock, no boulder in a
+gate mouth, no pair of boulders forming a gap narrower than the player, nothing generated on
+the pad, ejection never producing NaN. A run that generates a walled-off seam is not a
+variation, it is a broken run that only some players get.
+
+### Verified
+
+- 294 tests passing, 240 seeds fuzzed.
+- Captured two consecutive runs at 393x852: visibly different forests, boulders and seams.
+- A first capture showed the seams reading as specks of grit beside the boulders, so the
+  geometry was sized up from the measurement rather than judged in isolation — a player
+  cannot choose to walk out for fuel they cannot see is there.
+- New palette rules: a seam must never be mistaken for a boulder (one is worth the walk, the
+  other is in the way), and the ember glint is drawn unlit so it survives the night.
+- The design document contained two claims the code had just made false — "wood is the only
+  fuel" and "one resource". Corrected; the checker then rejected the result at 528 words and
+  the prose was trimmed to 498 rather than the limit being moved.
+
+### Open / next
+
+- **Still not verified on physical hardware.**
+- Requested and not yet built: **wandering animals** and **random events**. The generator and
+  its invariant harness are the foundation both will use.
+- The scenery is now rebuilt per run rather than once, which is more per-restart work than
+  before. Not measured on a phone yet.

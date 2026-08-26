@@ -42,6 +42,15 @@ export const PLAYER_BOOTS = 0x3d2b1f;
 // ground the game thinks they occupy.
 export const PLAYER_SHADOW = 0x1a2230;
 
+// --- The wilds -------------------------------------------------------------
+// A coal seam has to read as fuel at a glance, from across the frozen ground,
+// and must never be mistaken for a boulder — one is worth the walk and the
+// other is in the way. So the seam is near-black with a warm ember glint and
+// the boulder is plain cold grey.
+export const COAL_SEAM = 0x23262e;
+export const COAL_GLINT = 0xff8c3a;
+export const BOULDER = 0x8b939e;
+
 // --- Everything else that must not be mistaken for the player --------------
 export const GUARD = 0xc0392b;         // a trio, always at a gate, inside a range ring
 export const WOLF = 0x4b4f58;
@@ -76,6 +85,7 @@ export function contrast(a, b) {
  * blue parka disappeared into blue-grey snow at a glance despite being, on
  * paper, a completely different colour.
  */
+/** Every colour that must be tellable apart on the field. */
 export function rgbDistance(a, b) {
   const [r1, g1, b1] = channels(a);
   const [r2, g2, b2] = channels(b);

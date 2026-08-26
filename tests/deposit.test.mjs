@@ -98,7 +98,7 @@ test('on the pad with an empty carry, nothing accumulates', () => {
 test('over many calls, total deposited into store equals items removed from carry', () => {
   const dep = createDeposit();
   const carry = createCarry(8);
-  for (let i = 0; i < 8; i++) carryAdd(carry, i % 2 === 0 ? 'wood' : 'stone');
+  for (let i = 0; i < 8; i++) carryAdd(carry, i % 2 === 0 ? 'wood' : 'coal');
   const store = createStore();
 
   let totalDeposited = 0;
@@ -109,7 +109,7 @@ test('over many calls, total deposited into store equals items removed from carr
     if (kinds) totalDeposited += kinds.length;
   }
 
-  const totalInStore = store.wood + store.stone;
+  const totalInStore = store.wood + store.coal;
   assert.equal(totalInStore, startCount);
   assert.equal(totalDeposited, startCount);
   assert.equal(carryTotal(carry), 0);
@@ -119,7 +119,7 @@ test('the returned kinds list matches what was actually deposited', () => {
   const dep = createDeposit();
   const carry = createCarry(8);
   carryAdd(carry, 'wood');
-  carryAdd(carry, 'stone');
+  carryAdd(carry, 'coal');
   carryAdd(carry, 'wood');
   const store = createStore();
 
@@ -130,8 +130,8 @@ test('the returned kinds list matches what was actually deposited', () => {
   }
 
   const woodCount = allKinds.filter(k => k === 'wood').length;
-  const stoneCount = allKinds.filter(k => k === 'stone').length;
+  const coalCount = allKinds.filter(k => k === 'coal').length;
   assert.equal(woodCount, store.wood);
-  assert.equal(stoneCount, store.stone);
+  assert.equal(coalCount, store.coal);
   assert.equal(allKinds.length, 3);
 });

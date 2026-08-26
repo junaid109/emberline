@@ -29,8 +29,8 @@ test('reports full at capacity', () => {
 test('pop returns items last-in-first-out', () => {
   const c = createCarry(4);
   carryAdd(c, 'wood');
-  carryAdd(c, 'stone');
-  assert.equal(carryPop(c), 'stone');
+  carryAdd(c, 'coal');
+  assert.equal(carryPop(c), 'coal');
   assert.equal(carryPop(c), 'wood');
 });
 
@@ -42,7 +42,7 @@ test('counts by kind', () => {
   const c = createCarry(8);
   carryAdd(c, 'wood');
   carryAdd(c, 'wood');
-  carryAdd(c, 'stone');
+  carryAdd(c, 'coal');
   assert.equal(carryCountOf(c, 'wood'), 2);
   assert.equal(carryCountOf(c, 'meat'), 0);
 });

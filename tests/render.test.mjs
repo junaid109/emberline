@@ -427,6 +427,6 @@ test('an unknown prop kind is skipped rather than crashing the scene', () => {
 
 test('an empty landscape adds nothing', () => {
   const scene = new THREE.Scene();
-  assert.deepEqual(createScenery(scene, []), { count: 0, drawCalls: 0 });
+  assert.deepEqual(createScenery(scene, []), { count: 0, drawCalls: 0, meshes: [] });
   assert.equal(scene.children.length, 0);
 });

@@ -92,6 +92,7 @@ export function makeThreeStub() {
     InstancedMesh, Matrix4, Quaternion,
     DodecahedronGeometry: Geometry,
     IcosahedronGeometry: Geometry,
+    OctahedronGeometry: Geometry,
     StaticDrawUsage: 35044,
     Group: Object3D,
     Scene: class Scene extends Object3D {},

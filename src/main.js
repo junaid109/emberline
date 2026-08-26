@@ -8,7 +8,7 @@
 import { createScene } from './render/scene.js';
 import {
   createPlayer, createTree, updateStack, createFurnace,
-  createWolfMesh, createSquadMesh, createGateMesh,
+  createWolfMesh, createSquadMesh, createGateMesh, createCoalSeam, createBoulder,
 } from './render/actors.js';
 import { createGround } from './render/ground.js';
 import { createScenery } from './render/scenery.js';
@@ -32,7 +32,9 @@ const hud = createHud(document.getElementById('ui'));
 const groundView = createGround(view.scene);
 const pickGround = createGroundPicker(view.camera, canvas);
 
-let world = createWorld();
+// Seeded per run, so the first world a player sees is not the same world
+// every other player sees.
+let world = createWorld(Math.random, nextSeed());
 
 const player = createPlayer();
 view.scene.add(player);
@@ -41,6 +43,7 @@ view.scene.add(player);
 // a node index is all the renderer needs to find the mesh to hide.
 let nodeMeshes = [];
 let gateMeshes = [];
+let boulderMeshes = [];
 
 // Wolves come and go every night. Meshes are pooled rather than created and
 // destroyed per wolf: allocating GPU resources during a wave would stutter on
@@ -53,14 +56,26 @@ view.scene.add(furnace);
 const squadMesh = createSquadMesh();
 view.scene.add(squadMesh);
 
-let sceneryBuilt = false;
+let scenery = null;
 
 function buildWorldMeshes() {
   for (const m of nodeMeshes) view.scene.remove(m);
   for (const m of gateMeshes) view.scene.remove(m);
+  for (const m of boulderMeshes) view.scene.remove(m);
 
+  // Keyed by kind, because a coal seam and a tree are both harvestables to the
+  // simulation and must be nothing alike to the player: one is worth crossing
+  // frozen ground for and the other is the ordinary business of the day.
   nodeMeshes = world.nodes.map((node) => {
-    const mesh = createTree(node.x, node.z);
+    const mesh = node.kind === 'coal'
+      ? createCoalSeam(node.x, node.z)
+      : createTree(node.x, node.z);
+    view.scene.add(mesh);
+    return mesh;
+  });
+
+  boulderMeshes = world.boulders.map((b) => {
+    const mesh = createBoulder(b.x, b.z, b.radius);
     view.scene.add(mesh);
     return mesh;
   });
@@ -71,12 +86,11 @@ function buildWorldMeshes() {
     return mesh;
   });
 
-  // The landscape is deterministic and identical every run, so it is built
-  // once and simply left alone across restarts.
-  if (!sceneryBuilt) {
-    createScenery(view.scene, scatterScenery(world.gates, world.nodes));
-    sceneryBuilt = true;
-  }
+  // The landscape is keyed to the run's seed now that the layout varies, so it
+  // has to be rebuilt with it — a forest scattered around last run's trees
+  // would leave props standing in this run's clearings.
+  if (scenery) for (const m of scenery) view.scene.remove(m);
+  scenery = createScenery(view.scene, scatterScenery(world.gates, world.nodes, world.seed)).meshes;
 
   player.position.set(world.player.x, 0, world.player.z);
   furnace.position.set(world.pad.x, 0, world.pad.z);
@@ -98,8 +112,19 @@ createTapper(canvas, (x, y) => {
   if (point) rallyToward(world, point.x, point.z);
 });
 
+/**
+ * A fresh layout every run.
+ *
+ * Math.random rather than a counter: two players opening the game at the same
+ * moment should not get the same forest, and a player restarting should not be
+ * able to predict what the next one looks like.
+ */
+function nextSeed() {
+  return Math.floor(Math.random() * 0x7fffffff);
+}
+
 hud.onRestart(() => {
-  world = createWorld();
+  world = createWorld(Math.random, nextSeed());
   buildWorldMeshes();
 });
 
