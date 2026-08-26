@@ -923,3 +923,51 @@ Mutation-verified.
 - Gate meshes still build a lamp sphere and beam cylinder per call, so three gates' worth of
   small geometries leak per restart. Far smaller than the landscape was, but the same shape
   of bug.
+
+---
+
+## Session 012 — the last leak, and proving it in a real context
+
+### Gates
+
+The item left open at the end of Session 011, closed. `createGateMesh` built its lamp sphere
+and warning-beam cylinder inline, so every restart allocated three more of each and freed
+none — the same bug as the landscape, three orders of magnitude smaller, and invisible for
+the same reason: it cost nothing while gates were made once per session.
+
+Both geometries are now module-level singletons alongside the posts and lintel. The two
+materials stay per-gate, and that is not an oversight: each lamp lights independently, so
+they cannot be shared. That makes the materials the one thing a gate owns outright and the
+one thing a restart has to release, so gates expose `userData.dispose()` and `main.js` calls
+it when it tears down the previous run's meshes.
+
+Nodes and boulders were checked at the same time and are clean — they draw from shared
+geometry and own nothing, so removing them from the scene is the whole of their cleanup.
+
+Three tests: building a gate allocates no geometry, dispose frees exactly the two owned
+materials and leaves the shared geometry alone, and a gate built after a dispose still
+lights up. Mutation-verified — reverting both halves fails the first two.
+
+### A restore that went the wrong way
+
+Cleaning up after the mutation I ran `git checkout -- src/render/actors.js`, which reverted
+to HEAD and so discarded the fix along with the mutation. Caught immediately by grepping for
+the new symbols, and re-applied. Worth recording because the mutation workflow is only safe
+if the restore is scoped to the mutation: `git checkout` is the wrong tool while the fix
+itself is uncommitted.
+
+### Verified
+
+- 332 tests passing.
+- Driven in the browser through the rAF harness at 393x852: lit the fire, ran to dusk, and
+  captured the telegraphed gate — lamp and beam both drawing from the now-shared geometry in
+  a real WebGL context, which the Three.js stub cannot prove.
+- Then restarted three times and ran to dusk again: a different world, a different gate lit,
+  lamp and beam still drawing. Zero console errors. This is the check that matters, since
+  sharing geometry across meshes is exactly the change that silently blanks a scene on the
+  second build.
+
+### Open / next
+
+- **Still not verified on physical hardware.** Unchanged, and now clearly the largest gap.
+- Netlify still needs one interactive `netlify-cli login` before `npm run deploy` works.

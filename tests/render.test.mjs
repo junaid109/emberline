@@ -160,6 +160,56 @@ test('the warning beam is fully invisible on an unlit gate', () => {
   assert.ok(beams.some((b) => b.material.opacity > 0.3), 'a lit gate needs a clearly visible beam');
 });
 
+test('rebuilt gates reuse their geometries instead of allocating fresh ones', () => {
+  // The same leak the landscape had, at three gates' worth per restart. The
+  // lamp sphere and warning beam used to be built inside createGateMesh, which
+  // cost nothing while gates were made once per session — but the layout is
+  // per-run now, so every restart allocated more of both and freed none.
+  actors.createGateMesh(0, -26);
+  const before = THREE.Geometry.created;
+
+  actors.createGateMesh(18, 18);
+  actors.createGateMesh(-18, 18);
+
+  assert.equal(THREE.Geometry.created, before, 'building a gate allocated new geometry');
+});
+
+test('disposing a gate frees its own materials and spares the shared geometry', () => {
+  // Each lamp lights independently, so its material cannot be shared — which
+  // makes the material the one thing a gate owns outright and the one thing a
+  // restart has to release.
+  const g = actors.createGateMesh(0, -26);
+  const owned = [];
+  const walk = (o) => {
+    if (o.material) owned.push(o);
+    for (const c of o.children) walk(c);
+  };
+  walk(g);
+  assert.ok(owned.length > 0);
+
+  assert.equal(typeof g.userData.dispose, 'function', 'main.js calls this on every restart');
+  g.userData.dispose();
+
+  const lamps = owned.filter((o) => o.material.disposed);
+  assert.equal(lamps.length, 2, 'the lamp and beam materials must both be freed');
+  for (const o of owned) {
+    assert.equal(o.geometry.disposed, false, 'a shared geometry was disposed');
+  }
+});
+
+test('a gate built after a dispose still lights up', () => {
+  // The mirror of the test above: proving the shared geometry survived in
+  // practice, not just that a flag stayed false.
+  actors.createGateMesh(0, -26).userData.dispose();
+
+  const g = actors.createGateMesh(0, -26);
+  g.userData.setTelegraphed(true, 1);
+  const light = g.children.find((c) => typeof c.intensity === 'number');
+  assert.ok(light && light.intensity > 0, 'the rebuilt gate cannot be telegraphed');
+  const beam = g.children.find((c) => c.material && 'opacity' in c.material && c.material.opacity > 0.3);
+  assert.ok(beam, 'the rebuilt gate draws no warning beam');
+});
+
 test('a gate faces the furnace rather than sitting at a random angle', () => {
   const g = actors.createGateMesh(0, -26);
   assert.ok(Math.abs(g.rotation.y) < 1e-9, 'the north gate should face straight down the z axis');

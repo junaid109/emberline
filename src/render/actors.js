@@ -229,6 +229,12 @@ export function createSquadMesh() {
 const GATE_POST_GEO = new THREE.BoxGeometry(0.5, 3.2, 0.5);
 const GATE_POST_MAT = new THREE.MeshLambertMaterial({ color: 0x6b5a45 });
 const GATE_ARCH_GEO = new THREE.BoxGeometry(3.4, 0.45, 0.5);
+// Shared like every other geometry here. These two used to be built inside
+// createGateMesh, which was invisible while gates were made once per session —
+// but the layout is per-run now, so each restart allocated three more spheres
+// and three more cylinders that nothing ever freed.
+const GATE_LAMP_GEO = new THREE.SphereGeometry(1.15, 12, 12);
+const GATE_BEAM_GEO = new THREE.CylinderGeometry(0.45, 0.9, 14, 8, 1, true);
 
 /**
  * A gate: two posts and a lintel, plus a lamp that lights when this lane is
@@ -258,7 +264,7 @@ export function createGateMesh(x, z) {
   // realistically-scaled lamp is about three pixels, and this is the single
   // piece of information the night's decision is made from.
   const lampMat = new THREE.MeshBasicMaterial({ color: 0x3a4654 });
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(1.15, 12, 12), lampMat);
+  const lamp = new THREE.Mesh(GATE_LAMP_GEO, lampMat);
   lamp.position.y = 4.8;
   g.add(lamp);
 
@@ -266,7 +272,7 @@ export function createGateMesh(x, z) {
   // small on screen far better than a dot does, and it stays visible even when
   // the gate itself is near the edge of the frame.
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xff6a52, transparent: true, opacity: 0 });
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.9, 14, 8, 1, true), beamMat);
+  const beam = new THREE.Mesh(GATE_BEAM_GEO, beamMat);
   beam.position.y = 11;
   g.add(beam);
 
@@ -282,6 +288,19 @@ export function createGateMesh(x, z) {
     lampMat.color.setHex(on ? 0xff4d3d : 0x3a4654);
     warnLight.intensity = on ? 1.2 + pulse * 1.8 : 0;
     beamMat.opacity = on ? 0.22 + pulse * 0.3 : 0;
+  };
+
+  /**
+   * Frees what this gate alone owns.
+   *
+   * The two lamp materials stay per-gate on purpose — each lamp lights
+   * independently, so they cannot be shared — which makes them the one thing
+   * here a restart has to release. The geometries are shared and are
+   * deliberately NOT touched: the next run's gates draw from them.
+   */
+  g.userData.dispose = () => {
+    lampMat.dispose();
+    beamMat.dispose();
   };
 
   return g;

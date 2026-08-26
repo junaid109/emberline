@@ -69,7 +69,14 @@ let scenery = null;
 
 function buildWorldMeshes() {
   for (const m of nodeMeshes) view.scene.remove(m);
-  for (const m of gateMeshes) view.scene.remove(m);
+  // Gates carry a dispose(): each lamp needs its own material to light
+  // independently, and removing a group from the scene frees none of them.
+  // Nodes and boulders draw from shared geometry and own nothing, so removing
+  // them is the whole of their cleanup.
+  for (const m of gateMeshes) {
+    view.scene.remove(m);
+    m.userData.dispose();
+  }
   for (const m of boulderMeshes) view.scene.remove(m);
 
   // Keyed by kind, because a coal seam and a tree are both harvestables to the
