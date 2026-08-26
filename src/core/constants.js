@@ -220,3 +220,17 @@ export const SCENERY_NODE_CLEARANCE = 4;   // never crowd a harvestable
 // thawed ground is always clean worked earth and the frozen ground is where the
 // snow-covered rubble lives — which is also just truer to the fiction.
 export const SCENERY_CAMP_INNER = 23;      // RING_MAX (22) plus a margin
+
+// --- Title card ------------------------------------------------------------
+// The first gesture of the run is holding the screen until the furnace catches.
+// A hold rather than a tap, for three reasons: it cannot be triggered by the
+// accidental touch of picking a phone up, it puts a filling circle on screen —
+// which is the game's own symbol before the game has explained anything — and
+// it means the player's first action is lighting the fire the rest of the run
+// is spent defending.
+export const IGNITION_HOLD_SECONDS = 0.9;
+
+// Letting go drains the hold rather than resetting it. A thumb slips on a
+// moving train; losing 0.9s of progress to that would feel like the game
+// blaming the player before the run has even started.
+export const IGNITION_DECAY_MULT = 2.0;

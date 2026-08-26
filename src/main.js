@@ -21,6 +21,8 @@ import { createWorld, tickWorld, clampDt, rallyToward } from './core/world.js';
 import { scatterScenery } from './core/scatter.js';
 import { phaseRemaining, phaseProgress } from './core/cycle.js';
 import { createHud } from './ui/hud.js';
+import { createTitle } from './ui/title.js';
+import { createIgnition, tickIgnition } from './core/ignition.js';
 import { CAMERA_HEIGHT, CAMERA_DISTANCE, HEAT_MAX } from './core/constants.js';
 
 const canvas = document.getElementById('game');
@@ -118,10 +120,62 @@ function darkness(cycle) {
   }
 }
 
+// The title card holds the run back until the player lights the furnace. The
+// scene behind it is the real one, already built and already rendering, so the
+// backdrop costs a camera transform and nothing else.
+const title = createTitle(document.getElementById('ui'));
+const ignition = createIgnition();
+let started = false;
+
+/**
+ * Slowly orbits the camp while the title card is up, and swings home as the
+ * hold completes.
+ *
+ * A frozen frame would read as a screenshot, and a screenshot of a 3D game is
+ * the one thing that makes a player wonder whether it is running at all.
+ *
+ * The settle term is why the orbit is not free: at the moment the fire catches
+ * the camera could otherwise be anywhere on its circle, and play would open on
+ * a jump cut of up to half a turn. Scaling the angle by (1 - settle) lands it
+ * at exactly the play position on the frame ignition completes, so holding the
+ * screen visibly brings the camera to rest behind the player.
+ *
+ * @param {number} settle 0 while idling, 1 the instant the fire catches
+ */
+function orbitCamera(now, settle) {
+  const angle = now * 0.00007 * (1 - settle);
+  const z = world.player.z * settle;          // the play camera looks at the player, not the origin
+  view.camera.position.set(
+    Math.sin(angle) * CAMERA_DISTANCE,
+    CAMERA_HEIGHT,
+    Math.cos(angle) * CAMERA_DISTANCE + z
+  );
+  view.camera.lookAt(0, 0, z);
+}
+
 let last = performance.now();
 function frame(now) {
   const dt = clampDt((now - last) / 1000);
   last = now;
+
+  if (!started) {
+    if (tickIgnition(ignition, dt, title.held)) {
+      started = true;
+      title.dismiss();
+      hud.setVisible(true);
+    }
+    title.setProgress(ignition.progress);
+
+    // The furnace flame tracks the hold, so the fire the player is lighting is
+    // visibly the fire in the scene rather than an unrelated progress bar.
+    furnace.userData.setFlame(ignition.progress);
+    groundView.setRingRadius(ringRadius(ignition.progress * world.heat));
+    orbitCamera(now, ignition.progress);
+
+    view.render();
+    requestAnimationFrame(frame);
+    return;
+  }
 
   const ev = tickWorld(world, dt, stick.dir.x, stick.dir.y);
 

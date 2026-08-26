@@ -88,7 +88,19 @@ export function createHud(root) {
   let lastBanner = null;
   let lastOver = undefined;
 
+  // The HUD is built at boot but must not be on screen during the title card:
+  // four resource counters reading zero, over a card telling the player what
+  // the game is, answers a question nobody has asked yet.
+  const chrome = [panel, fuel, banner];
+  const shown = chrome.map((n) => n.style.display || '');
+  for (const n of chrome) n.style.display = 'none';
+
   return {
+    /** @param {boolean} on shows or hides the live HUD (not the end-of-run card) */
+    setVisible(on) {
+      chrome.forEach((n, i) => { n.style.display = on ? shown[i] : 'none'; });
+    },
+
     /** @param {() => void} fn called when the player asks for another run */
     onRestart(fn) {
       restart.addEventListener('click', fn);

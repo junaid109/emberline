@@ -29,7 +29,9 @@ At dusk the gates light up — one at first, three by the finale. That is the on
 
 ## Designed for a thumb
 
-Portrait, one hand, no tutorial text. The left thumb walks. A tap anywhere else rallies the squad to the nearest gate, so an imprecise thumb on a moving train still gives the order you meant.
+Portrait, one hand, three lines of instruction on the title card and none after it. The left thumb walks. A tap anywhere else rallies the squad to the nearest gate, so an imprecise thumb on a moving train still gives the order you meant.
+
+A run begins by holding the screen until the furnace catches — a filling circle, which is the game's own symbol before the game has explained anything.
 
 The game teaches itself through geometry. A run opens with the outermost trees just past the thawed edge, so your first walk hits deep snow and the rule lands in a single gesture — before any wolf exists to complicate it.
 
