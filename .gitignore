@@ -18,3 +18,4 @@ vendor/
 
 # generated from docs/design-intent.md by `npm run doc`; the markdown is the source of truth
 docs/design-intent.docx
+.firebase/

@@ -976,3 +976,43 @@ itself is uncommitted.
 
 - **Still not verified on physical hardware.** Unchanged, and now clearly the largest gap.
 - Netlify still needs one interactive `netlify-cli login` before `npm run deploy` works.
+
+---
+
+## Session 013 — a link anyone can open
+
+### Firebase Hosting
+
+Deployed to Firebase static hosting so the prototype can be tested on a real phone by
+tapping a link, which is the unblocker for the two gaps that have been open since Session
+002: physical-device verification, and a playtest with someone who has never seen it.
+
+The deploy target is `dist/`, which is the **unpacked submission zip**, not a separate web
+build. `npm run deploy` runs `package` then `unpack` then uploads, so the live site is
+byte-identical to the artefact that will be submitted. A deployment that drifts from the
+submission would be worse than no deployment: it would build confidence in a build nobody
+is going to judge.
+
+Two deliberate choices in `firebase.json`:
+
+- **`Cache-Control: no-store` on everything.** Device testing means redeploying often, and a
+  phone holding a cached `index.html` would silently test yesterday's build.
+- **No SPA rewrite.** The obvious `"rewrites": [{"source": "**", "destination": "/index.html"}]`
+  would turn any missing file into a 200 serving the page — which would mask exactly the
+  class of packaging bug this project spends effort guarding against. A missing asset should
+  be a visible 404.
+
+### Verified
+
+- Live at the hosting URL: title card renders, zero console errors.
+- **Exactly two network requests, both same-origin**: the page and `./vendor/three.js`. The
+  no-external-request guarantee holds on the deployed copy, not just in the local zip.
+- WebGL context live, `#game` fixed and portrait at a 393x852 viewport.
+
+### Open / next
+
+- **Physical device testing is now unblocked and still not done.** It needs a person and a
+  phone, not another commit.
+- Account note: hosting sits on a company Google account rather than a personal one. Flagged
+  at the time; the entrant chose to proceed.
+- Design-intent doc still needs to be placed on the official template.
