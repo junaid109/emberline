@@ -5,7 +5,7 @@ import { createWorld, tickWorld, clampDt, spawnNodes } from '../src/core/world.j
 import { carryTotal, carryIsFull } from '../src/core/carry.js';
 import {
   PLAYER_SPEED, WORLD_RADIUS, WORLD_EDGE_MARGIN, HEAT_START, HEAT_DRAIN_DAY,
-  HEAT_PER_WOOD, HEAT_MAX, CARRY_CAP, HARVEST_SECONDS, HARVEST_RANGE,
+  HEAT_PER_WOOD, HEAT_MAX, CARRY_CAP, SWING_COOLDOWN, SWING_RANGE,
   NODE_COUNT, NODE_AMOUNT, MAX_FRAME_DT, DEPOSIT_INTERVAL,
   NODE_REGROW_SECONDS,
 } from '../src/core/constants.js';
@@ -13,8 +13,15 @@ import {
 const STEP = MAX_FRAME_DT;
 
 /** Runs n steps of dt with a fixed input direction. */
-function run(world, n, dt = STEP, dx = 0, dz = 0) {
-  for (let i = 0; i < n; i++) tickWorld(world, dt, dx, dz);
+/**
+ * Runs n steps of dt with a fixed input direction, pickaxe held.
+ *
+ * Held by default because gathering stopped being passive: standing next to a
+ * tree does nothing now, so a harvest test that did not swing would be testing
+ * that nothing happens.
+ */
+function run(world, n, dt = STEP, dx = 0, dz = 0, actions = { swing: true }) {
+  for (let i = 0; i < n; i++) tickWorld(world, dt, dx, dz, actions);
 }
 
 /**
@@ -25,8 +32,8 @@ function run(world, n, dt = STEP, dx = 0, dz = 0) {
  * that would silently become a test about starvation instead, so these ones say
  * out loud that the fire is not the subject.
  */
-function runFed(world, n, dt = STEP, dx = 0, dz = 0) {
-  for (let i = 0; i < n; i++) { world.heat = HEAT_MAX; tickWorld(world, dt, dx, dz); }
+function runFed(world, n, dt = STEP, dx = 0, dz = 0, actions = { swing: true }) {
+  for (let i = 0; i < n; i++) { world.heat = HEAT_MAX; tickWorld(world, dt, dx, dz, actions); }
 }
 
 /** Teleports the player next to a node without simulating the walk there. */
@@ -51,8 +58,8 @@ test('clampDt rejects zero, negative, and NaN steps', () => {
   assert.equal(clampDt(NaN), 0);
 });
 
-test('MAX_FRAME_DT stays below HARVEST_SECONDS, or tickHarvest silently drops yields', () => {
-  assert.ok(MAX_FRAME_DT < HARVEST_SECONDS);
+test('MAX_FRAME_DT stays below SWING_COOLDOWN, so no swing is ever skipped', () => {
+  assert.ok(MAX_FRAME_DT < SWING_COOLDOWN);
 });
 
 // --- spawn -----------------------------------------------------------------
@@ -136,32 +143,57 @@ test('heat floors at zero and never goes negative', () => {
 
 // --- harvest ---------------------------------------------------------------
 
-test('standing on a node yields exactly one item per HARVEST_SECONDS', () => {
+test('the first swing lands at once, then one per cooldown', () => {
+  // The immediacy is the point. A button whose first press does nothing for a
+  // third of a second reads as an unresponsive game, which is exactly what the
+  // old stand-and-wait harvest felt like on a phone.
   const w = createWorld();
   const node = w.nodes[0];
   standAt(w, node.x, node.z);
 
-  // One item's worth of time, minus a frame.
-  const framesPerItem = Math.round(HARVEST_SECONDS / STEP);
-  run(w, framesPerItem - 1);
-  assert.equal(carryTotal(w.carry), 0);
+  run(w, 1);
+  assert.equal(carryTotal(w.carry), 1, 'the first swing should land on the first frame');
 
-  tickWorld(w, STEP, 0, 0);
-  assert.equal(carryTotal(w.carry), 1);
+  // Then nothing until the cooldown has run.
+  run(w, Math.round(SWING_COOLDOWN / STEP) - 2);
+  assert.equal(carryTotal(w.carry), 1, 'a second log arrived before the cooldown elapsed');
+
+  run(w, 2);
+  assert.equal(carryTotal(w.carry), 2);
 });
 
-test('a node out of HARVEST_RANGE yields nothing', () => {
+test('a held pickaxe swings at a steady rhythm rather than once', () => {
+  // Holding is how a phone player gathers; requiring a tap per log would be a
+  // thumb-destroying way to fill an eight-slot carry.
+  const w = createWorld();
+  standAt(w, w.nodes[0].x, w.nodes[0].z);
+
+  // Ceil, not round: the cooldown is 0.34s against a 0.05s step, so a swing
+  // actually lands every 7 frames, not every 6.8.
+  const framesPerSwing = Math.ceil(SWING_COOLDOWN / STEP);
+  run(w, framesPerSwing * 3 + 1);
+  assert.equal(carryTotal(w.carry), 4, 'three cooldowns plus the opening swing');
+});
+
+test('releasing the pickaxe stops the gathering', () => {
+  const w = createWorld();
+  standAt(w, w.nodes[0].x, w.nodes[0].z);
+  run(w, 200, STEP, 0, 0, { swing: false });
+  assert.equal(carryTotal(w.carry), 0, 'the world gathered with no button held');
+});
+
+test('a node out of SWING_RANGE yields nothing', () => {
   const w = createWorld();
   const node = w.nodes[0];
-  standAt(w, node.x + HARVEST_RANGE + 0.5, node.z);
+  standAt(w, node.x + SWING_RANGE + 0.5, node.z);
   run(w, 200);
   assert.equal(carryTotal(w.carry), 0);
 });
 
-test('a node just inside HARVEST_RANGE does yield', () => {
+test('a node just inside SWING_RANGE does yield', () => {
   const w = createWorld();
   const node = w.nodes[0];
-  standAt(w, node.x + HARVEST_RANGE - 0.01, node.z);
+  standAt(w, node.x + SWING_RANGE - 0.01, node.z);
   run(w, 200);
   assert.ok(carryTotal(w.carry) > 0);
 });
@@ -178,7 +210,7 @@ test('a node depletes after NODE_AMOUNT items and reports its index once', () =>
 
   let depletedEvents = 0;
   for (let i = 0; i < ticks; i++) {
-    const ev = tickWorld(w, STEP, 0, 0);
+    const ev = tickWorld(w, STEP, 0, 0, { swing: true });
     if (ev.depletedNode !== -1) {
       assert.equal(ev.depletedNode, 0);
       depletedEvents++;
@@ -203,7 +235,7 @@ test('a node that regrows and is stripped again announces BOTH times', () => {
   let revived = 0;
   for (let i = 0; i < Math.floor((NODE_REGROW_SECONDS * 2 + 4) / STEP); i++) {
     w.carry.items.length = 0;                 // an infinitely deep pocket: test the node, not the carry
-    const ev = tickWorld(w, STEP, 0, 0);
+    const ev = tickWorld(w, STEP, 0, 0, { swing: true });
     if (ev.depletedNode === 0) depleted++;
     if (ev.revivedNodes.includes(0)) revived++;
   }
@@ -235,7 +267,7 @@ test('only one node is harvested per tick even when two are in range', () => {
   w.nodes[1].z = w.nodes[0].z;
   standAt(w, w.nodes[0].x, w.nodes[0].z);
 
-  const framesPerItem = Math.round(HARVEST_SECONDS / STEP);
+  const framesPerItem = Math.round(SWING_COOLDOWN / STEP);
   run(w, framesPerItem);
   assert.equal(carryTotal(w.carry), 1, 'two overlapping nodes must not double-yield');
 });
@@ -244,10 +276,10 @@ test('stackChanged fires on the frame an item is gained and not otherwise', () =
   const w = createWorld();
   standAt(w, w.nodes[0].x, w.nodes[0].z);
 
-  const framesPerItem = Math.round(HARVEST_SECONDS / STEP);
+  const framesPerItem = Math.round(SWING_COOLDOWN / STEP);
   let changes = 0;
   for (let i = 0; i < framesPerItem; i++) {
-    if (tickWorld(w, STEP, 0, 0).stackChanged) changes++;
+    if (tickWorld(w, STEP, 0, 0, { swing: true }).stackChanged) changes++;
   }
   assert.equal(changes, 1);
 });
@@ -257,7 +289,7 @@ test('stackChanged fires on the frame an item is gained and not otherwise', () =
 test('walking onto the pad with wood converts it to heat', () => {
   const w = createWorld();
   standAt(w, w.nodes[0].x, w.nodes[0].z);
-  run(w, Math.round(HARVEST_SECONDS / STEP) * 3);        // gather 3 wood
+  run(w, Math.round(SWING_COOLDOWN / STEP) * 3);        // gather 3 wood
   const gathered = carryTotal(w.carry);
   assert.equal(gathered, 3);
 
@@ -363,8 +395,8 @@ test('a full gather-haul-deposit round trip completes under joystick control', (
     const dx = node.x - w.player.x;
     const dz = node.z - w.player.z;
     const d = Math.hypot(dx, dz);
-    const inRange = d <= HARVEST_RANGE - 0.1;
-    tickWorld(w, STEP, inRange ? 0 : dx / d, inRange ? 0 : dz / d);
+    const inRange = d <= SWING_RANGE - 0.1;
+    tickWorld(w, STEP, inRange ? 0 : dx / d, inRange ? 0 : dz / d, { swing: true });
   }
   assert.equal(carryTotal(w.carry), NODE_AMOUNT, 'never emptied the tree into the stack');
 
@@ -374,7 +406,7 @@ test('a full gather-haul-deposit round trip completes under joystick control', (
     const dz = w.pad.z - w.player.z;
     const d = Math.hypot(dx, dz) || 1;
     const arrived = d < 0.2;
-    tickWorld(w, STEP, arrived ? 0 : dx / d, arrived ? 0 : dz / d);
+    tickWorld(w, STEP, arrived ? 0 : dx / d, arrived ? 0 : dz / d, { swing: true });
   }
   assert.equal(carryTotal(w.carry), 0, 'never unloaded at the furnace');
   assert.equal(w.store.wood, NODE_AMOUNT);

@@ -17,7 +17,7 @@ export const CAMERA_FOV = 45;
 // ground is atan(70/54) ~= 52deg — steep, diorama-style, but not straight down.
 export const CAMERA_HEIGHT = 70;
 export const CAMERA_DISTANCE = 54;     // behind the player, giving the tilted three-quarter view
-export const WORLD_RADIUS = 34;        // playfield half-extent in world units
+export const WORLD_RADIUS = 24;        // playfield half-extent in world units
 
 // Width of ground, in world units, that must be visible horizontally.
 //
@@ -31,7 +31,7 @@ export const WORLD_RADIUS = 34;        // playfield half-extent in world units
 // ring does: 2 * GATE_RING_RADIUS = 52, plus ~19% so a lit gate sits clearly
 // inside the frame rather than on its boundary. The heat ring still dominates
 // the view; it simply no longer sets the bound.
-export const CAMERA_TARGET_WIDTH = 62;
+export const CAMERA_TARGET_WIDTH = 38;
 
 export const HEAT_MAX = 100;
 
@@ -45,12 +45,12 @@ export const HEAT_MAX = 100;
 // it explains itself. Pinned by tests/economy.test.mjs.
 export const HEAT_START = 78;
 export const HEAT_DRAIN_DAY = 1.1;     // heat units per second
-export const RING_MIN = 6;             // ring radius at zero heat
-export const RING_MAX = 22;            // ring radius at full heat
+export const RING_MIN = 3;             // ring radius at zero heat
+export const RING_MAX = 15;            // ring radius at full heat
 export const RIM_BAND = 0.5;           // constant world-space width of the rim marking the ring boundary
 export const HEAT_PER_WOOD = 6;        // heat units restored per wood log deposited into the furnace
 
-export const PLAYER_SPEED = 7.5;       // world units per second
+export const PLAYER_SPEED = 9.8;       // world units per second
 
 // Speed on ground the furnace has NOT thawed, as a fraction of PLAYER_SPEED.
 //
@@ -64,16 +64,14 @@ export const PLAYER_SPEED = 7.5;       // world units per second
 // — deliberately, because a hard wall would trap a player whose fire burned
 // low, with the nodes they need to refuel it stranded on the far side. Slow is
 // a cost you can choose to pay; a wall is a death spiral with no counterplay.
-export const FROZEN_SPEED_MULT = 0.45;
+export const FROZEN_SPEED_MULT = 0.62;
 export const CARRY_CAP = 8;
 
-export const HARVEST_SECONDS = 0.7;    // per item pulled from a node
-export const HARVEST_RANGE = 2.2;
 export const DEPOSIT_INTERVAL = 0.09;  // seconds between items flying off the stack
 
 export const NODE_COUNT = 10;          // number of harvestable nodes spawned at start
-export const NODE_RING_BASE = 14;      // inner radius of the spawn ring band, in world units
-export const NODE_RING_STEP = 4;       // radius step between the 3 interleaved spawn bands
+export const NODE_RING_BASE = 9;      // inner radius of the spawn ring band, in world units
+export const NODE_RING_STEP = 3;       // radius step between the 3 interleaved spawn bands
 export const NODE_AMOUNT = 6;          // items held by each spawned node
 
 // Seconds for a harvested node to grow back one log, up to NODE_AMOUNT.
@@ -88,20 +86,30 @@ export const NODE_AMOUNT = 6;          // items held by each spawned node
 // rate one player can carry it: the world can just barely keep up with perfect
 // routing, and not at all with a player who camps a single clearing. That gap
 // is where the skill lives. Pinned by tests/economy.test.mjs.
-export const NODE_REGROW_SECONDS = 18;
+export const NODE_REGROW_SECONDS = 10;
 
 export const WORLD_EDGE_MARGIN = 1;    // keeps the player this far inside WORLD_RADIUS
 
 export const PAD_RADIUS = 3.2;         // furnace deposit pad radius; consumed by isOnPad, so it is gameplay
+
+// Where the player is standing when the fire catches.
+//
+// Derived, not hand-picked. It was a hardcoded 8, which sat comfortably inside
+// the old node ring at 14 — and when the world was pulled in for a phone, that
+// same 8 put the player INSIDE the tree ring, auto-harvesting a trunk before
+// they had touched the stick. Far enough out to be clear of the pad, far enough
+// in to be clear of the nearest tree by more than SWING_RANGE.
+// Pinned by tests/world.test.mjs.
+export const PLAYER_START_Z = PAD_RADIUS + 2.3;
 
 export const STICK_RADIUS = 60;        // pointer distance in CSS px at which the stick reads full deflection
 export const STICK_ZONE_X_MAX = 0.6;   // stick activates only left of this fraction of viewport width
 export const STICK_ZONE_Y_MIN = 0.45;  // stick activates only below this fraction of viewport height
 
 // Largest simulation step accepted from the clock. Load-bearing, not hygiene:
-// tickHarvest yields at most one item per call, so a step at or above
-// HARVEST_SECONDS (0.7) would silently discard harvest progress. Keeping this
-// well below that bound is what makes both tickHarvest and tickDeposit safe.
+// tickSwing fires at most one swing per call, so a step at or above
+// SWING_COOLDOWN (0.34) would silently discard swings. Keeping this well
+// below that bound is what makes both the pickaxe and tickDeposit safe.
 export const MAX_FRAME_DT = 0.05;
 
 // Distance from the camera to the point it looks at. Every depth-dependent
@@ -152,10 +160,10 @@ export const HEAT_DRAIN_NIGHT_MULT = 2.5;
 // Three fixed approach lanes. Wolves only ever come down a gate, so the rally
 // decision is always a choice between three known places, never a search.
 export const GATE_COUNT = 3;
-export const GATE_RING_RADIUS = 26;    // out at the treeline, outside RING_MAX
+export const GATE_RING_RADIUS = 17;    // out at the treeline, outside RING_MAX
 
 // --- Wolves ----------------------------------------------------------------
-export const WOLF_SPEED = 3.4;         // slower than PLAYER_SPEED: you can always outrun them
+export const WOLF_SPEED = 4.4;         // slower than PLAYER_SPEED: you can always outrun them
 export const WOLF_HP = 3;
 export const WOLF_SPAWN_INTERVAL = 1.6;
 export const WOLVES_FIRST_NIGHT = 3;
@@ -201,7 +209,7 @@ export const CAMP_SCENERY_COUNT = 34;
 
 // The treeline proper: a dense band of forest just beyond where the player can
 // walk, which is what makes the playable circle read as a clearing.
-export const TREELINE_INNER = 36;      // just outside WORLD_RADIUS
+export const TREELINE_INNER = 26;      // just outside WORLD_RADIUS
 export const TREELINE_OUTER = 96;
 export const TREELINE_COUNT = 320;
 
@@ -219,7 +227,7 @@ export const SCENERY_NODE_CLEARANCE = 4;   // never crowd a harvestable
 // reads exactly like an approaching wolf. Setting this above RING_MAX means the
 // thawed ground is always clean worked earth and the frozen ground is where the
 // snow-covered rubble lives — which is also just truer to the fiction.
-export const SCENERY_CAMP_INNER = 23;      // RING_MAX (22) plus a margin
+export const SCENERY_CAMP_INNER = 16;      // RING_MAX (22) plus a margin
 
 // --- Title card ------------------------------------------------------------
 // The first gesture of the run is holding the screen until the furnace catches.
@@ -246,14 +254,14 @@ export const IGNITION_DECAY_MULT = 2.0;
 // angle and which radius inside a band is rolled fresh each time.
 export const WORLDGEN_SEED = 20260826;     // the default; play passes a live seed
 export const NODE_ANGLE_JITTER = 0.42;     // radians either side of the even spacing
-export const NODE_RADIUS_JITTER = 1.6;     // world units either side of the band
+export const NODE_RADIUS_JITTER = 1.2;     // world units either side of the band
 
 // Minimum gap between any two harvestables. The harvest loop takes the FIRST
 // node in range and stops, so two trees inside each other make which one you
 // are cutting depend on array order — invisible and unpredictable to the
 // player. Jitter alone could not prevent it: NODE_RADIUS_JITTER either side of
 // bands NODE_RING_STEP apart lets two adjacent bands come within 0.8 units.
-export const NODE_MIN_SPACING = 3.6;
+export const NODE_MIN_SPACING = 3.4;
 
 // --- Coal ------------------------------------------------------------------
 // A second fuel, and the reason the frozen waste is worth entering. Coal burns
@@ -262,11 +270,11 @@ export const NODE_MIN_SPACING = 3.6;
 // That is the thaw mechanic paying for itself rather than a new system beside
 // it, which is why coal exists and a fifth resource does not.
 export const HEAT_PER_COAL = 15;           // vs HEAT_PER_WOOD 6
-export const COAL_SEAMS = 5;
+export const COAL_SEAMS = 4;
 export const COAL_AMOUNT = 4;              // lumps per seam, vs NODE_AMOUNT 6 for a tree
 export const COAL_REGROW_SECONDS = 55;     // a seam is not a forest; it comes back slowly
-export const COAL_INNER = 24;              // clear of RING_MAX (22): always on frozen ground
-export const COAL_OUTER = 31;              // clear of WORLD_RADIUS (34) minus the edge margin
+export const COAL_INNER = 17;              // clear of RING_MAX (22): always on frozen ground
+export const COAL_OUTER = 22;              // clear of WORLD_RADIUS (34) minus the edge margin
 
 // --- Boulders --------------------------------------------------------------
 // Blocking obstacles, so the shortest line between two points is not always
@@ -279,15 +287,15 @@ export const COAL_OUTER = 31;              // clear of WORLD_RADIUS (34) minus t
 // already carries the coal seams and three gate exclusion zones; asking for
 // fourteen made the rejection sampler give up part-way on some seeds, so some
 // runs quietly generated fewer obstacles than others.
-export const BOULDER_COUNT = 9;
-export const BOULDER_RADIUS = 1.7;         // collision radius, and roughly the drawn size
-export const BOULDER_INNER = 24;
+export const BOULDER_COUNT = 6;
+export const BOULDER_RADIUS = 1.5;         // collision radius, and roughly the drawn size
+export const BOULDER_INNER = 17;
 // Bounded so that ejecting the player from a boulder at the outer limit still
 // leaves them inside the world: BOULDER_OUTER + BOULDER_RADIUS + body must stay
 // under WORLD_RADIUS - WORLD_EDGE_MARGIN. Pinned in tests/worldgen.test.mjs.
-export const BOULDER_OUTER = 30;
-export const BOULDER_GATE_CLEARANCE = 6;   // a lane must stay walkable and readable
-export const BOULDER_NODE_CLEARANCE = 4.5; // never wall a harvestable off
+export const BOULDER_OUTER = 20;
+export const BOULDER_GATE_CLEARANCE = 4.2;   // a lane must stay walkable and readable
+export const BOULDER_NODE_CLEARANCE = 3.2; // never wall a harvestable off
 
 // --- Wildlife --------------------------------------------------------------
 // Hares. They are the only meat in the world, and meat is the only thing that
@@ -298,15 +306,15 @@ export const BOULDER_NODE_CLEARANCE = 4.5; // never wall a harvestable off
 // either uncatchable or a formality; darting makes the chase something you read
 // and time, and it is what a hare actually does.
 export const HARE_COUNT = 4;               // alive at once
-export const HARE_DART_SPEED = 6.2;
-export const HARE_DART_SECONDS = 0.55;
+export const HARE_DART_SPEED = 10.4;
+export const HARE_DART_SECONDS = 0.32;
 export const HARE_STILL_SECONDS = 0.85;    // frozen, watching — this is your window
 export const HARE_WANDER_SPEED = 1.6;
 export const HARE_FLEE_RADIUS = 7.0;       // where it notices you
 export const HARE_CATCH_RADIUS = 1.3;
 export const HARE_RESPAWN_SECONDS = 22;
-export const HARE_INNER = 24;              // the wilds, like the coal and the rock
-export const HARE_OUTER = 32;
+export const HARE_INNER = 16;              // the wilds, like the coal and the rock
+export const HARE_OUTER = 22.5;
 
 // Meat feeds the guard squad at dusk: one is eaten, and that night the squad
 // fights harder. Automatic on purpose — no button, no inventory screen. The
@@ -320,5 +328,26 @@ export const SQUAD_FED_DPS_MULT = 1.7;
 export const BLIZZARD_DRAIN_MULT = 1.7;    // the furnace fights the wind
 export const BLIZZARD_DARKNESS = 0.45;     // daylight dims, but never to night
 export const CACHE_WOOD = 10;              // a supply drop, out in the wilds
-export const CACHE_INNER = 25;
-export const CACHE_OUTER = 31;
+export const CACHE_INNER = 17;
+export const CACHE_OUTER = 21;
+
+// --- the pickaxe and the sprint ---------------------------------------------
+//
+// Added after the first real playtest on a phone. Three findings drove them:
+// the player moved too slowly, there was nothing to press, and being attacked
+// by wolves offered no response at all beyond walking away.
+//
+// The pickaxe is one button doing the obvious thing to whatever is in front of
+// you: a tree gives wood, a seam gives coal, a wolf takes the hit. One verb,
+// two uses, no mode to learn.
+export const SWING_COOLDOWN = 0.34;    // seconds between swings; the rhythm of gathering
+export const SWING_RANGE = 3.0;        // a swing has reach; you need not stand in the trunk
+export const SWING_DAMAGE = 1;         // wolves have WOLF_HP 3, so three connected swings
+
+// Sprint is held, costs stamina, and refills when you let go. It exists so a
+// player caught out at dusk has a way to get home that is a decision rather
+// than a wait, and so the walk between trees is not the boring part.
+export const SPRINT_MULT = 1.55;
+export const SPRINT_SECONDS = 2.6;     // full-tank duration at full speed
+export const SPRINT_REGEN = 0.55;      // stamina per second recovered when not sprinting
+export const SPRINT_FLOOR = 0.25;      // must recover past this before sprint re-engages

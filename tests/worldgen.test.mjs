@@ -17,7 +17,7 @@ import {
   COAL_SEAMS, COAL_AMOUNT, COAL_INNER, COAL_OUTER, HEAT_PER_COAL, HEAT_PER_WOOD,
   BOULDER_COUNT, BOULDER_RADIUS, BOULDER_INNER, BOULDER_OUTER,
   BOULDER_GATE_CLEARANCE, BOULDER_NODE_CLEARANCE,
-  WORLD_RADIUS, WORLD_EDGE_MARGIN, RING_MAX, PAD_RADIUS, HARVEST_RANGE,
+  WORLD_RADIUS, WORLD_EDGE_MARGIN, RING_MAX, PAD_RADIUS, SWING_RANGE,
   MAX_FRAME_DT, HEAT_MAX,
 } from '../src/core/constants.js';
 
@@ -111,7 +111,7 @@ test('no two harvestables sit inside each other', () => {
   everySeed((w) => {
     for (let i = 0; i < w.nodes.length; i++) {
       for (let j = i + 1; j < w.nodes.length; j++) {
-        assert.ok(between(w.nodes[i], w.nodes[j]) > HARVEST_RANGE,
+        assert.ok(between(w.nodes[i], w.nodes[j]) > SWING_RANGE,
           `two harvestables are ${between(w.nodes[i], w.nodes[j]).toFixed(1)} apart`);
       }
     }

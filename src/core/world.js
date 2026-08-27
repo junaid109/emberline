@@ -10,16 +10,18 @@
 // numbers onto meshes.
 import {
   PLAYER_SPEED, WORLD_RADIUS, WORLD_EDGE_MARGIN,
-  HEAT_START, HEAT_DRAIN_DAY, HEAT_PER_WOOD, CARRY_CAP, HARVEST_RANGE,
-  NODE_COUNT, NODE_RING_BASE, NODE_RING_STEP, NODE_AMOUNT, PAD_RADIUS,
+  HEAT_START, HEAT_DRAIN_DAY, HEAT_PER_WOOD, CARRY_CAP,
+  NODE_COUNT, NODE_RING_BASE, NODE_RING_STEP, NODE_AMOUNT, PAD_RADIUS, PLAYER_START_Z,
+  SWING_RANGE, SWING_DAMAGE, SPRINT_MULT,
   MAX_FRAME_DT, HEAT_DRAIN_NIGHT_MULT, WOLVES_FIRST_NIGHT, WOLVES_PER_NIGHT,
   WOLF_SPAWN_INTERVAL, GATE_RING_RADIUS, WOLF_SPAWN_SPREAD,
   FROZEN_SPEED_MULT, HEAT_PER_COAL, WORLDGEN_SEED, SQUAD_FED_DPS_MULT, CACHE_WOOD,
 } from './constants.js';
 import { drainHeat, addFuel, ringRadius } from './heat.js';
-import { tickHarvest, tickRegrow } from './nodes.js';
+import { harvestOnce, tickRegrow } from './nodes.js';
 import { generateWorld, pushOutOfBoulders } from './worldgen.js';
 import { createCarry, carryAdd, carryTotal, carryIsFull } from './carry.js';
+import { createAction, tickSwing, tickSprint } from './action.js';
 import { createStore } from './store.js';
 import { isOnPad, createDeposit, tickDeposit } from './deposit.js';
 import { createCycle, tickCycle, wolvesForNight, gatesForNight } from './cycle.js';
@@ -71,8 +73,9 @@ export function createWorld(roll = Math.random, seed = WORLDGEN_SEED) {
     pendingWolves: 0,
     kills: 0,
     over: null,          // null | 'won' | 'lost'
-    player: { x: 0, z: 8, angle: 0 },
+    player: { x: 0, z: PLAYER_START_Z, angle: 0 },
     carry: createCarry(CARRY_CAP),
+    action: createAction(),
     store: createStore(),
     deposit: createDeposit(),
     nodes,
@@ -85,6 +88,7 @@ export function createWorld(roll = Math.random, seed = WORLDGEN_SEED) {
       stackChanged: false, onPad: false, onFrozen: false,
       phaseEntered: null, wolvesSpawned: 0, wolvesKilled: 0, mauled: false,
       hareCaught: 0, eventRolled: null, cacheTaken: false,
+      swung: false, hitWolf: false,
     },
   };
 }
@@ -92,9 +96,9 @@ export function createWorld(roll = Math.random, seed = WORLDGEN_SEED) {
 /**
  * Clamps a raw elapsed time to a step the simulation can safely take.
  *
- * This is load-bearing, not defensive hygiene: tickHarvest yields at most one
- * item per call and tickDeposit's loop is only bounded because MAX_FRAME_DT is
- * below both HARVEST_SECONDS and a sane multiple of DEPOSIT_INTERVAL. A
+ * This is load-bearing, not defensive hygiene: tickSwing fires at most one
+ * swing per call and tickDeposit's loop is only bounded because MAX_FRAME_DT is
+ * below both SWING_COOLDOWN and a sane multiple of DEPOSIT_INTERVAL. A
  * backgrounded tab handing us a 12-second step would otherwise empty a node
  * or a full carry stack in a single invisible frame.
  */
@@ -112,11 +116,11 @@ export function clampDt(rawSeconds) {
  *
  * @returns {boolean} whether the player is standing on frozen ground
  */
-function movePlayer(player, dirX, dirZ, dt, thawedRadius, boulders) {
+function movePlayer(player, dirX, dirZ, dt, thawedRadius, boulders, speedMult = 1) {
   const frozen = Math.hypot(player.x, player.z) > thawedRadius;
   if (dirX === 0 && dirZ === 0) return frozen;
 
-  const speed = PLAYER_SPEED * (frozen ? FROZEN_SPEED_MULT : 1);
+  const speed = PLAYER_SPEED * (frozen ? FROZEN_SPEED_MULT : 1) * speedMult;
   player.x += dirX * speed * dt;
   player.z += dirZ * speed * dt;
 
@@ -242,10 +246,12 @@ function tickNightCycle(world, dt, ev) {
  * pre-drain or pre-deposit snapshot. Threat runs last so that a wolf's damage
  * is applied to the same settled value.
  */
-export function tickWorld(world, dt, dirX, dirZ) {
+export function tickWorld(world, dt, dirX, dirZ, actions = {}) {
   const ev = world.events;
   ev.harvestedKind = null;
   ev.depletedNode = -1;
+  ev.swung = false;
+  ev.hitWolf = false;
   ev.revivedNodes.length = 0;
   ev.deposited = null;
   ev.stackChanged = false;
@@ -266,7 +272,12 @@ export function tickWorld(world, dt, dirX, dirZ) {
 
   // Read the ring BEFORE this frame's drain, so the ground the player felt
   // underfoot is the same ground that was drawn for them last frame.
-  ev.onFrozen = movePlayer(world.player, dirX, dirZ, dt, ringRadius(world.heat), world.boulders);
+  // Sprint resolves before movement, because it is a multiplier ON this
+  // frame's step. Frozen ground still halves whatever it returns: sprinting
+  // through deep snow is faster than walking through it, never as fast as
+  // sprinting on thawed ground.
+  const dash = tickSprint(world.action, dt, !!actions.sprint, SPRINT_MULT);
+  ev.onFrozen = movePlayer(world.player, dirX, dirZ, dt, ringRadius(world.heat), world.boulders, dash);
 
   // Night costs multiples of what day costs. Surviving the dark is what the
   // day's hauling was FOR, and this multiplier is the whole reason it matters.
@@ -280,22 +291,52 @@ export function tickWorld(world, dt, dirX, dirZ) {
     if (tickRegrow(world.nodes[i], dt)) ev.revivedNodes.push(i);
   }
 
-  if (!carryIsFull(world.carry)) {
-    for (let i = 0; i < world.nodes.length; i++) {
-      const node = world.nodes[i];
-      if (node.depleted) continue;
+  // 4b. The pickaxe.
+  //
+  // Gathering used to happen simply by standing near a tree, which read on a
+  // phone as nothing happening at all: no button, no feedback, no sense that
+  // the player was doing it rather than watching it. A swing is one press with
+  // an obvious result, and it is the same press for a tree, a coal seam and a
+  // wolf — one verb, whatever is in front of you.
+  ev.swung = tickSwing(world.action, dt, !!actions.swing);
 
-      const dx = node.x - world.player.x;
-      const dz = node.z - world.player.z;
-      if (dx * dx + dz * dz > HARVEST_RANGE * HARVEST_RANGE) continue;
+  if (ev.swung) {
+    // A wolf in reach takes the hit before anything else. When one is chewing
+    // the furnace, "swing" has to mean "hit the wolf" and not "keep chopping".
+    let struck = null;
+    let nearest = SWING_RANGE * SWING_RANGE;
+    for (const wolf of world.wolves) {
+      if (wolf.hp <= 0) continue;
+      const d = (wolf.x - world.player.x) ** 2 + (wolf.z - world.player.z) ** 2;
+      if (d < nearest) { nearest = d; struck = wolf; }
+    }
 
-      const kind = tickHarvest(node, dt);
-      if (kind) {
-        carryAdd(world.carry, kind);
-        ev.harvestedKind = kind;
-        if (node.depleted) ev.depletedNode = i;
+    if (struck) {
+      struck.hp -= SWING_DAMAGE;
+      ev.hitWolf = true;
+      if (struck.hp <= 0) {
+        world.kills += 1;
+        ev.wolvesKilled += 1;
       }
-      break;   // harvest one node at a time, even when several are in range
+    } else if (!carryIsFull(world.carry)) {
+      let target = -1;
+      let closest = SWING_RANGE * SWING_RANGE;
+      for (let i = 0; i < world.nodes.length; i++) {
+        const node = world.nodes[i];
+        if (node.depleted) continue;
+        const d = (node.x - world.player.x) ** 2 + (node.z - world.player.z) ** 2;
+        if (d < closest) { closest = d; target = i; }
+      }
+
+      if (target !== -1) {
+        const node = world.nodes[target];
+        const kind = harvestOnce(node);
+        if (kind) {
+          carryAdd(world.carry, kind);
+          ev.harvestedKind = kind;
+          if (node.depleted) ev.depletedNode = target;
+        }
+      }
     }
   }
 

@@ -13,10 +13,15 @@ const EMBER = '#' + RING_RIM.toString(16).padStart(6, '0');
 const COLD = '#' + PLAYER_PARKA.toString(16).padStart(6, '0');
 
 /** How to play, in three lines. */
+// Four lines, in the order a player needs them: how to move, how to gather,
+// how to spend what you gathered, and the one control nothing on screen hints
+// at. The A button is listed second because "hold A" is the answer to the very
+// first question a new player has, and the first playtest never found it.
 const LEGEND = [
-  ['Left thumb', 'walk'],
-  ['Tap anywhere', 'send your guards to a gate'],
-  ['Stand on the furnace', 'feed the fire'],
+  ['Left thumb', 'walk · B to sprint'],
+  ['Hold A', 'swing your pickaxe at trees, coal and wolves'],
+  ['Stand on the furnace', 'feed the fire and widen the thaw'],
+  ['Tap the ground', 'send your guards to a gate'],
 ];
 
 // Split across two lines deliberately. As one string it wrapped mid-phrase at

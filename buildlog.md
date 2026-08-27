@@ -25,12 +25,19 @@ one where the AI's own guard code was inert. The failures are the useful part.
   gathered and spent. Anything that could not be was deleted, not stubbed.
 - **Escalation is within one session.** Judges play one sitting, so nothing is
   gated behind a later unlock. The whole seven-night arc is roughly ten minutes.
-- **Controls: one thumb, portrait.** Left thumb walks via a floating joystick.
-  A tap anywhere else rallies the guard squad to the nearest gate. No aiming, no
-  menus, no inventory screen.
-- **Combat resolves itself.** The only night decision is *where the squad
-  stands*, made once, under a five-second clock. Travel time is the price of
-  choosing wrong.
+- **Controls: portrait, thumbs only.** Left thumb walks via a floating
+  joystick. Two buttons under the right thumb, on the Game Boy diagonal: A
+  swings the pickaxe, B sprints. A tap on open ground rallies the guard squad to
+  the nearest gate. No menus, no inventory screen. *(Updated after the first
+  phone playtest — see Session 13. The game previously had no buttons at all and
+  gathered by standing still, which read as nothing happening.)*
+- **One verb for the pickaxe.** A hits whatever is nearest — tree, coal seam or
+  wolf — so there is still nothing to aim.
+- **The squad fights on its own.** The night decision is *where it stands*, made
+  once, under a five-second clock. Travel time is the price of choosing wrong;
+  the pickaxe is the answer to anything that gets past them.
+- **The game says what to do.** One line at the foot of the screen, ordered by
+  urgency, never more than one at a time.
 - **Interaction verb: walk-in pads.** Standing on the furnace deposits fuel.
   There are no menus in the game at all.
 - **Art: procedural low-poly geometry written in code.** No model files, no
@@ -45,6 +52,9 @@ one where the AI's own guard code was inert. The failures are the useful part.
   breaks a submission rule.
 - **Scope deliberately excluded:** crafting tree, inventory screen, dialogue,
   aiming, multiplayer, second currency.
+- **Nothing ships beside a replacement.** When the pickaxe replaced proximity
+  gathering, the old harvest path was deleted rather than left in place — a
+  second system nothing calls is exactly the half-built system Focus penalises.
 
 ### Deliberately accepted risk
 
@@ -357,14 +367,71 @@ the real unpacked zip.
 
 ---
 
+---
+
+## Session 13: the first phone playtest
+
+**Tool:** Claude Code
+
+**What I built:** nothing new for the first hour — I played it on a real phone instead, and
+it was bad. Zoomed out, painfully slow, nothing to press, and no way to tell what the game
+wanted. I got to the first night, got attacked by wolves, watched the fire go out, and had no
+idea what I was supposed to do about any of it.
+
+**Biggest problem:** the world was built for a monitor. 68 units across on a 393px screen
+meant everything was both far away and far apart, which is why it read as "zoomed out" AND
+"extremely slow" at the same time. Zooming the camera alone would have fixed one and made the
+other worse, so the whole play space came in about 30% — world, thaw ring, gate ring, camera
+frame, and every band and clearance outside the camp.
+
+That broke ten tests and every one was worth having. The gates stopped fitting the frame. The
+outer trees stopped sitting exactly at the edge of a full thaw, which is the coincidence that
+makes "the fire is full" and "the forest is in reach" the same sentence. The hares became
+slower than the player, so the chase stopped existing. The forest fell too far behind the
+player to be catchable by good routing. And the boulder placer gave up entirely, because its
+clearances were absolute distances that had not shrunk with the world.
+
+It also flushed out a bug I had just introduced: the player now **spawned standing inside a
+tree**, auto-gathering before touching the controls. The spawn point was a hardcoded number
+that had been safely inside the old layout. It is derived from the furnace now.
+
+**Key decisions and why:** a pickaxe on the A button and a sprint on B, laid out on the Game
+Boy diagonal because that is a shape a thumb already knows. Gathering moved off "stand near a
+tree" and onto a button press — the old way read on a phone as the game doing nothing at all.
+One button covers trees, coal and wolves, so there is one verb and nothing to aim.
+
+Sprint runs on a stamina that **locks out** when you drain it. Without the lock, running dry
+costs nothing: you stutter-sprint one frame at a time and the resource is decorative.
+
+I also cut the snow penalty from 0.45 to 0.62 rather than removing it. The playtest said snow
+was "way slow" and it was, but past 0.7 the game's whole signature stops being a cost.
+
+**Pivots:** the design document said "combat resolves itself; you never aim". A pickaxe makes
+that false, so the document was rewritten — and it is a submission artifact, so it cannot be
+left claiming something the game no longer does. Trimming it back under 500 words took four
+passes; the checker refused to emit the file until it fit.
+
+**What changed after playtesting:** all of it. This session is entirely playtest response.
+
+**What I learned:** looking at a screenshot is not playing. I had verified this build visually
+every session and been pleased with it, and none of that caught a control scheme with nothing
+to press or a world scaled for the wrong screen. The competition guidance says one playtest
+with someone new beats any amount of solo polish. It was right, and it cost three sessions of
+assumptions to find that out.
+
+**Where things stand / next:** 354 tests passing, and the gather-mine-haul loop verified end
+to end in a browser — walked to a tree, held A, watched the on-screen instruction advance to
+the next step. Next: play it on the phone again. One round of fixes to a verdict that harsh
+is not likely to be enough.
+
 ## Honest gaps, as of the latest session
 
-1. **It has never been played by another person, and never on a physical
-   phone.** The guidance is explicit that one playtest with someone new will
-   surface more than any amount of solo polish, and Playability is 25% of the
-   score. Everything so far has been verified in a desktop browser emulating a
-   phone viewport. This is the single largest remaining risk and it is not a
-   technical one.
+1. **It has now been played on a phone exactly once, by me, and it failed
+   badly.** Session 13 is the response. What has still never happened is a
+   playtest by someone who has not seen it before — which the guidance says is
+   worth more than any amount of solo polish — and a second pass on the phone
+   to find out whether these fixes actually landed. This remains the single
+   largest risk and it is not a technical one.
 2. **The weather system is the weakest thing in the build.** "Dynamic weather"
    is named in the guidance under where not to spend your time. It is the newest
    system and the least connected to the core loop. It works and is not

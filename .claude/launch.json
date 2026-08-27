@@ -4,7 +4,12 @@
     {
       "name": "emberline-serve",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "serve"],
+      "runtimeArgs": [
+        "run",
+        "serve",
+        "--",
+        "--harness"
+      ],
       "port": 8080
     }
   ]

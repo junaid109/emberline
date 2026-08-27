@@ -19,7 +19,7 @@ import { phaseDuration } from '../src/core/cycle.js';
 import {
   MAX_FRAME_DT, HEAT_START, HEAT_MAX, HEAT_DRAIN_DAY, HEAT_DRAIN_NIGHT_MULT,
   HEAT_PER_WOOD, NODE_COUNT, NODE_AMOUNT, NODE_REGROW_SECONDS, TOTAL_NIGHTS,
-  HARVEST_RANGE, PAD_RADIUS, CARRY_CAP, HARVEST_SECONDS, PLAYER_SPEED,
+  SWING_RANGE, PAD_RADIUS, CARRY_CAP, SWING_COOLDOWN, PLAYER_SPEED,
 } from '../src/core/constants.js';
 
 const STEP = MAX_FRAME_DT;
@@ -46,7 +46,7 @@ function nearestLiveNode(world) {
     const d = Math.hypot(n.x - world.player.x, n.z - world.player.z);
     if (d < bestDist) { bestDist = d; best = n; }
   }
-  return best ? { x: best.x, z: best.z, range: HARVEST_RANGE * 0.7 } : null;
+  return best ? { x: best.x, z: best.z, range: SWING_RANGE * 0.7 } : null;
 }
 
 /**
@@ -77,7 +77,10 @@ function playFuelOnly(seconds) {
   for (let t = 0; t < seconds / STEP && !world.over; t++) {
     world.wolves.length = 0;                 // isolate the FUEL economy from combat
     const dir = greedyStep(world);
-    tickWorld(world, STEP, dir.x, dir.z);
+    // The bot holds the pickaxe throughout: it is simulating a player who is
+    // trying, and gathering is an action now rather than a side effect of
+    // standing still.
+    tickWorld(world, STEP, dir.x, dir.z, { swing: true });
   }
   return world;
 }
@@ -152,7 +155,7 @@ test('the forest regrows slower than one player can carry it away', () => {
   const world = createWorld(() => 0.5);
   const meanRadius = world.nodes.reduce((s, n) => s + Math.hypot(n.x, n.z), 0) / world.nodes.length;
   const travel = (meanRadius * 2) / PLAYER_SPEED;
-  const playerRate = CARRY_CAP / (CARRY_CAP * HARVEST_SECONDS + travel);
+  const playerRate = CARRY_CAP / (CARRY_CAP * SWING_COOLDOWN + travel);
 
   assert.ok(worldRate < playerRate,
     `the forest (${worldRate.toFixed(2)}/s) out-produces the player `
@@ -179,7 +182,10 @@ test('winning is not a formality — the fire gets genuinely low', () => {
   for (let t = 0; t < (runDemand().seconds + 30) / STEP && !world.over; t++) {
     world.wolves.length = 0;
     const dir = greedyStep(world);
-    tickWorld(world, STEP, dir.x, dir.z);
+    // The bot holds the pickaxe throughout: it is simulating a player who is
+    // trying, and gathering is an action now rather than a side effect of
+    // standing still.
+    tickWorld(world, STEP, dir.x, dir.z, { swing: true });
     if (world.cycle.night > 1) lowest = Math.min(lowest, world.heat);
   }
   assert.ok(lowest < HEAT_MAX * 0.75,

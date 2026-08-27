@@ -1,44 +1,60 @@
-// tests/nodes.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createNode, tickHarvest } from '../src/core/nodes.js';
-import { HARVEST_SECONDS } from '../src/core/constants.js';
 
-// tickHarvest yields at most one item per call and does not reclaim progress
-// beyond a single HARVEST_SECONDS interval. That is only safe because the
-// caller (src/main.js) clamps dt to 0.05s before calling tickHarvest — assert
-// that invariant explicitly here, mirroring tests/deposit.test.mjs.
-test('clamped dt (0.05s) stays well under HARVEST_SECONDS, the invariant tickHarvest relies on', () => {
-  assert.ok(0.05 < HARVEST_SECONDS, 'test assumption: clamped dt must be smaller than HARVEST_SECONDS');
+import { createNode, harvestOnce, tickRegrow } from '../src/core/nodes.js';
+import { NODE_REGROW_SECONDS, SWING_COOLDOWN, MAX_FRAME_DT } from '../src/core/constants.js';
+
+// harvestOnce is the pickaxe's yield. It replaced tickHarvest, which accrued
+// time while the player stood still — a way of gathering that read on a phone
+// as the game doing nothing.
+
+test('clamped dt stays well under SWING_COOLDOWN, so no swing is ever skipped', () => {
+  assert.ok(MAX_FRAME_DT < SWING_COOLDOWN,
+    'a frame step at or above the cooldown would silently drop swings');
 });
 
-test('a new node holds its full amount and is not depleted', () => {
-  const n = createNode('wood', 5, 5, 3);
-  assert.equal(n.remaining, 3);
-  assert.equal(n.depleted, false);
-});
-
-test('ticking below the harvest time yields nothing', () => {
+test('a swing takes exactly one item', () => {
   const n = createNode('wood', 0, 0, 3);
-  assert.equal(tickHarvest(n, HARVEST_SECONDS * 0.5), null);
-});
-
-test('ticking past the harvest time yields one item', () => {
-  const n = createNode('wood', 0, 0, 3);
-  const kind = tickHarvest(n, HARVEST_SECONDS + 0.01);
-  assert.equal(kind, 'wood');
+  assert.equal(harvestOnce(n), 'wood');
   assert.equal(n.remaining, 2);
 });
 
-test('progress carries over rather than resetting', () => {
-  const n = createNode('wood', 0, 0, 3);
-  tickHarvest(n, HARVEST_SECONDS * 0.6);
-  assert.notEqual(tickHarvest(n, HARVEST_SECONDS * 0.6), null);
+test('a node reports the kind it actually holds', () => {
+  const n = createNode('coal', 0, 0, 2);
+  assert.equal(harvestOnce(n), 'coal');
 });
 
-test('a node depletes and then yields nothing further', () => {
+test('a node depletes on the swing that empties it', () => {
   const n = createNode('wood', 0, 0, 1);
-  tickHarvest(n, HARVEST_SECONDS + 0.01);
+  assert.equal(harvestOnce(n), 'wood');
   assert.equal(n.depleted, true);
-  assert.equal(tickHarvest(n, HARVEST_SECONDS + 0.01), null);
+  assert.equal(harvestOnce(n), null, 'a bare node kept handing out logs');
+});
+
+test('a swing banks nothing, so a node cannot pay out a free log later', () => {
+  // The failure mode of the old time-accrual harvest: partial progress stored
+  // on the node meant walking past a half-chopped tree handed the next player
+  // a log for one frame's work.
+  const n = createNode('wood', 0, 0, 5);
+  for (let i = 0; i < 20; i++) harvestOnce(n);
+  assert.equal(n.remaining, 0);
+  assert.equal(Object.keys(n).includes('progress'), false,
+    'the node still carries harvest progress that nothing reads');
+});
+
+test('regrowth returns one item at a time, up to the cap', () => {
+  const n = createNode('wood', 0, 0, 2);
+  harvestOnce(n);
+  harvestOnce(n);
+  assert.equal(n.depleted, true);
+
+  assert.equal(tickRegrow(n, NODE_REGROW_SECONDS), true, 'a stripped node should announce its return');
+  assert.equal(n.remaining, 1);
+  assert.equal(n.depleted, false);
+
+  assert.equal(tickRegrow(n, NODE_REGROW_SECONDS), false, 'only the revival is announced');
+  assert.equal(n.remaining, 2);
+
+  tickRegrow(n, NODE_REGROW_SECONDS * 3);
+  assert.equal(n.remaining, 2, 'regrowth overflowed the cap');
 });

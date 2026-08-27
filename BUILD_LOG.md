@@ -1016,3 +1016,83 @@ Two deliberate choices in `firebase.json`:
 - Account note: hosting sits on a company Google account rather than a personal one. Flagged
   at the time; the entrant chose to proceed.
 - Design-intent doc still needs to be placed on the official template.
+
+---
+
+## Session 014 — the first phone playtest, and what it cost
+
+### The verdict
+
+The entrant played the deployed build on a real phone for the first time. The verbatim
+summary was "absolutely dog shit". Specifically: the camera is zoomed out a long way, the
+character moves extremely slowly, the snow is slower still, there is nothing to press, and
+"you can't see what you're supposed to do... I got attacked by wolves and then the fire went
+down and then nothing, what do I do?"
+
+Every one of those is a Playability or Engagement finding, which is 55% of the score, and not
+one of them was visible from inside a desktop browser emulating a phone. This is the session
+that justifies the whole "verify visually" habit and then shows it was still not enough:
+looking at a screenshot is not playing.
+
+### The world was sized for a monitor
+
+The play space was 68 units across on a 393px screen. That is the root cause of both "zoomed
+out" and "extremely slow" — everything was far away AND far apart. Zooming the camera alone
+would have fixed the first and worsened the second, so the whole space was pulled in about
+30%: WORLD_RADIUS 34→24, RING_MAX 22→15, GATE_RING_RADIUS 26→17, CAMERA_TARGET_WIDTH 62→38,
+and every band and clearance outside the camp scaled with it. PLAYER_SPEED went 7.5→9.8 as
+asked, and FROZEN_SPEED_MULT 0.45→0.62 — deliberately not further, since the test suite pins
+it below 0.7 and above that the signature mechanic stops being a cost at all.
+
+That change broke ten tests, and every one of them was earning its keep:
+
+- The gates no longer fit the frame, and the outer tree band no longer sat exactly at
+  RING_MAX — the invariant that makes "the fire is full" and "the forest is in reach" the
+  same sentence.
+- The hares became slower than the player, so the chase stopped existing.
+- The forest fell too far behind the player's gathering rate for good routing to close the
+  gap.
+- The boulder sampler gave up: the clearances were absolute distances that had not shrunk
+  with the world, so they consumed the entire band.
+
+It also surfaced a bug the tests could only find because of a knock-on: **the player now
+spawned standing inside a tree**, auto-harvesting it before touching the stick. The spawn was
+a hardcoded `z: 8`, fine inside the old node ring at 14. It is now derived from the pad, and
+pinned.
+
+### A pickaxe, a sprint, and a line that says what to do
+
+`src/core/action.js` is new and pure: a swing on a cooldown, and a sprint on a stamina that
+locks out when drained (without the lock, running dry costs nothing — you stutter-sprint one
+frame at a time). `src/ui/buttons.js` puts them on the Game Boy diagonal, well past the 44px
+touch minimum, with the stamina drawn as a ring around the sprint button rather than as a bar
+somewhere else on screen.
+
+Gathering moved off proximity and onto the A button. That is a real change to the core loop
+and it made twelve tests fail, correctly — they all gathered by standing still. The old
+`tickHarvest` is deleted rather than left beside the new path: a second harvest system nothing
+calls is exactly the half-built system the Focus criterion penalises.
+
+`src/core/coach.js` answers "what do I do?" in one line at the foot of the screen, ordered by
+urgency rather than chronology — a dying fire outranks a full carry, which outranks "go and
+mine". It is pure so the advice is asserted in tests, including one that walks every
+phase/heat/carry combination and fails if any state has nothing to say.
+
+### Verified
+
+- 354 tests passing.
+- Driven in a real browser at 393x852: walked with the joystick while holding A, watched the
+  coach line advance from "HOLD A TO MINE THE TREES" to "STAND ON THE FURNACE TO FEED IT".
+  That is the playtest complaint, resolved, end to end.
+- Button geometry measured rather than eyeballed: both past 44px, inside the viewport, clear
+  of the home-swipe edge, `pointer-events: auto`.
+- Title card legend measured for wrap and clipping at 393px: four rows, all single-line.
+- Design-intent document rewritten (it claimed "combat resolves itself; you never aim", which
+  a pickaxe makes false) and back down to exactly 500/500 words.
+
+### Open / next
+
+- **This needs another playtest on the same phone.** The last one invalidated three sessions
+  of assumptions; there is no reason to think one round of fixes is enough.
+- The camera is still steeply top-down and the player still reads small. Lowering the
+  elevation angle is the next lever if it still feels distant.

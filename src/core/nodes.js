@@ -1,5 +1,5 @@
 // src/core/nodes.js
-import { HARVEST_SECONDS, NODE_REGROW_SECONDS } from './constants.js';
+import { NODE_REGROW_SECONDS } from './constants.js';
 
 /**
  * @param {number} [regrowSeconds] seconds per log/lump grown back.
@@ -10,26 +10,23 @@ import { HARVEST_SECONDS, NODE_REGROW_SECONDS } from './constants.js';
 export function createNode(kind, x, z, amount, regrowSeconds = NODE_REGROW_SECONDS) {
   return {
     kind, x, z, remaining: amount, cap: amount,
-    progress: 0, regrowth: 0, regrowSeconds, depleted: false,
+    regrowth: 0, regrowSeconds, depleted: false,
   };
 }
 
 /**
- * Advances harvest progress. Returns the yielded kind string for the caller
- * to push into a carry, or null if nothing yielded this call.
+ * Takes one item from a node immediately.
  *
- * Yields at most one item per call and leaves any excess progress
- * unreclaimed — safe only because the caller (src/main.js) clamps its dt to
- * 0.05s, well under HARVEST_SECONDS (0.7s), so progress can never cross more
- * than one harvest interval in a single tick.
+ * The pickaxe's yield. A swing has already paid its own cost — the cooldown in
+ * src/core/action.js is the rhythm — so it either takes a log or finds nothing
+ * left to take. No progress is stored, which means a node cannot bank partial
+ * swings and hand out a free log to whoever walks past next.
+ *
+ * @returns {string|null} the kind taken, or null if the node is bare
  */
-export function tickHarvest(node, dt) {
-  if (node.depleted) return null;
+export function harvestOnce(node) {
+  if (node.depleted || node.remaining <= 0) return null;
 
-  node.progress += dt;
-  if (node.progress < HARVEST_SECONDS) return null;
-
-  node.progress -= HARVEST_SECONDS;    // carry the remainder over, do not reset
   node.remaining -= 1;
   if (node.remaining <= 0) node.depleted = true;
   return node.kind;

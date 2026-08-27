@@ -23,6 +23,7 @@ import { scatterScenery } from './core/scatter.js';
 import { phaseRemaining, phaseProgress } from './core/cycle.js';
 import { createHud } from './ui/hud.js';
 import { createTitle } from './ui/title.js';
+import { createButtons } from './ui/buttons.js';
 import { createIgnition, tickIgnition } from './core/ignition.js';
 import { CAMERA_HEIGHT, CAMERA_DISTANCE, HEAT_MAX } from './core/constants.js';
 
@@ -30,6 +31,8 @@ const canvas = document.getElementById('game');
 const view = createScene(canvas);
 const stick = createJoystick(canvas);
 const hud = createHud(document.getElementById('ui'));
+const buttons = createButtons(document.getElementById('ui'));
+buttons.setVisible(false);
 const groundView = createGround(view.scene);
 const pickGround = createGroundPicker(view.camera, canvas);
 
@@ -234,6 +237,7 @@ function frame(now) {
       started = true;
       title.dismiss();
       hud.setVisible(true);
+      buttons.setVisible(true);
     }
     title.setProgress(ignition.progress);
 
@@ -248,7 +252,11 @@ function frame(now) {
     return;
   }
 
-  const ev = tickWorld(world, dt, stick.dir.x, stick.dir.y);
+  const ev = tickWorld(world, dt, stick.dir.x, stick.dir.y, {
+    swing: buttons.a.held,
+    sprint: buttons.b.held,
+  });
+  buttons.setStamina(world.action.stamina);
 
   player.position.x = world.player.x;
   player.position.z = world.player.z;

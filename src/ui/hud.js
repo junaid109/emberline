@@ -2,6 +2,7 @@
 import { RESOURCES } from '../core/store.js';
 import { HEAT_MAX, TOTAL_NIGHTS } from '../core/constants.js';
 import { EVENT_LABEL } from '../core/weather.js';
+import { objective } from '../core/coach.js';
 
 const ICONS = { wood: '🪵', coal: '🪨', meat: '🥩' };
 
@@ -88,6 +89,7 @@ export function createHud(root) {
   let lastFuel = null;
   let lastBanner = null;
   let lastOver = undefined;
+  let lastCoach = undefined;
 
   // The HUD is built at boot but must not be on screen during the title card:
   // four resource counters reading zero, over a card telling the player what
@@ -106,7 +108,20 @@ export function createHud(root) {
 
   let toastTimer = null;
 
-  const chrome = [panel, fuel, banner];
+  // The coaching line. Placed LOW, just above the buttons, because that is
+  // where the player is already looking while playing — the top of the screen
+  // is status furniture and gets tuned out within a minute.
+  const coach = document.createElement('div');
+  coach.style.cssText = [
+    'position:absolute', 'bottom:46px', 'left:50%', 'transform:translateX(-50%)',
+    'font:800 13px system-ui', 'letter-spacing:.08em', 'white-space:nowrap',
+    'padding:7px 16px', PILL, 'color:#ffe6a8',
+    'pointer-events:none', 'max-width:92vw', 'overflow:hidden', 'text-overflow:ellipsis',
+  ].join(';');
+
+  root.append(coach);
+
+  const chrome = [panel, fuel, banner, coach];
   const shown = chrome.map((n) => n.style.display || '');
   for (const n of chrome) n.style.display = 'none';
 
@@ -161,6 +176,15 @@ export function createHud(root) {
         banner.textContent = bannerText;
         banner.style.color = PHASE_COLOR[phase];
         lastBanner = bannerText;
+      }
+
+      // What to do next. Written every frame it changes, and only then, so the
+      // line does not flicker while the state behind it is stable.
+      const hint = objective(world);
+      if (hint !== lastCoach) {
+        lastCoach = hint;
+        coach.textContent = hint || '';
+        coach.style.display = hint ? '' : 'none';
       }
 
       if (world.over !== lastOver) {
